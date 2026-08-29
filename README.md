@@ -1,6 +1,10 @@
 # migraine-map
 
+## Description
+
 Migraine Map is a migraine diary application.
+
+## Product
 
 The product documentation lives in [`product/`](product): the
 [vision](product/vision.md), [problem statement](product/problem-statement.md),
@@ -25,34 +29,13 @@ The product documentation lives in [`product/`](product): the
 
 ### Database
 
-`createdb` ships with the PostgreSQL client tools, so PostgreSQL must be
-installed, running, and reachable, and you need a login role that is allowed to
-create databases.
-
-macOS (Homebrew) — the install creates a superuser role named after your macOS
-user, so `createdb` works as-is:
+Create the application and test databases, owned by the role you will use in
+`.env`:
 
 ```bash
-brew install postgresql@16
-brew services start postgresql@16
 createdb migraine_map
 createdb migraine_map_testing
 ```
-
-Ubuntu/Debian — only the `postgres` role exists after install, so create a login
-role first (this matches the credentials in `.env.example`):
-
-```bash
-sudo apt install postgresql postgresql-client
-sudo service postgresql start
-sudo -u postgres psql -c "CREATE ROLE migraine_map LOGIN CREATEDB PASSWORD 'password';"
-sudo -u postgres createdb -O migraine_map migraine_map
-sudo -u postgres createdb -O migraine_map migraine_map_testing
-```
-
-Both databases must be owned by the user in `DB_USERNAME`: the test suite drops
-and recreates tables in `migraine_map_testing`, which fails with
-`must be owner of table ...` if they were created by another role.
 
 ### Application
 
@@ -63,18 +46,9 @@ frontend:
 composer setup
 ```
 
-`composer setup` copies `.env.example` to `.env` if it does not exist. Set the
-database credentials there before running it, or re-run `php artisan migrate`
-after editing them:
-
-```dotenv
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=migraine_map
-DB_USERNAME=your_user
-DB_PASSWORD=your_password
-```
+`composer setup` copies `.env.example` to `.env`. If your database credentials
+differ from the defaults, update `DB_USERNAME` and `DB_PASSWORD` in `.env` and
+re-run `php artisan migrate`.
 
 Run the application:
 
@@ -88,27 +62,19 @@ provided by the starter kit out of the box.
 
 ## Testing
 
-Tests run with Pest against the `migraine_map_testing` database.
+Tests run with Pest against the `migraine_map_testing` database, reusing the
+credentials from `.env`. No extra setup is needed:
 
 ```bash
 php artisan test
 ```
 
-`phpunit.xml` only overrides `DB_CONNECTION` and `DB_DATABASE`; the host, user
-and password still come from `.env`. To point the tests at a different server or
-user, create a `.env.testing` — Laravel loads it instead of `.env` when
-`APP_ENV=testing`, and it is git-ignored:
+To use different credentials for tests, copy `.env` and edit the `DB_*` values —
+Laravel loads `.env.testing` instead of `.env` when running tests:
 
-```dotenv
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=migraine_map_testing
-DB_USERNAME=your_test_user
-DB_PASSWORD=your_test_password
+```bash
+cp .env .env.testing
 ```
-
-A `.env.testing` must be complete enough to boot the app, so copy `.env` and
-edit the `DB_*` values rather than writing it from scratch.
 
 ## Checks
 
