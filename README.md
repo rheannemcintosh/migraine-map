@@ -23,12 +23,38 @@ The product documentation lives in [`product/`](product): the
 
 ## Getting started
 
-Create the application and test databases:
+### Database
+
+`createdb` ships with the PostgreSQL client tools, so PostgreSQL must be
+installed, running, and reachable, and you need a login role that is allowed to
+create databases.
+
+macOS (Homebrew) — the install creates a superuser role named after your macOS
+user, so `createdb` works as-is:
 
 ```bash
+brew install postgresql@16
+brew services start postgresql@16
 createdb migraine_map
 createdb migraine_map_testing
 ```
+
+Ubuntu/Debian — only the `postgres` role exists after install, so create a login
+role first (this matches the credentials in `.env.example`):
+
+```bash
+sudo apt install postgresql postgresql-client
+sudo service postgresql start
+sudo -u postgres psql -c "CREATE ROLE migraine_map LOGIN CREATEDB PASSWORD 'password';"
+sudo -u postgres createdb -O migraine_map migraine_map
+sudo -u postgres createdb -O migraine_map migraine_map_testing
+```
+
+Both databases must be owned by the user in `DB_USERNAME`: the test suite drops
+and recreates tables in `migraine_map_testing`, which fails with
+`must be owner of table ...` if they were created by another role.
+
+### Application
 
 Install dependencies, create `.env`, generate an app key, migrate and build the
 frontend:
