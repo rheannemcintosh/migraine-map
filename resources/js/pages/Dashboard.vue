@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { dashboard } from '@/routes';
 
 defineOptions({
@@ -18,30 +18,15 @@ defineOptions({
 <template>
     <Head title="Dashboard" />
 
-    <div
-        class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-        <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div
-                class="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border"
-            >
-                <PlaceholderPattern />
-            </div>
-            <div
-                class="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border"
-            >
-                <PlaceholderPattern />
-            </div>
-            <div
-                class="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border"
-            >
-                <PlaceholderPattern />
-            </div>
-        </div>
+    <div class="flex h-full flex-1 flex-col gap-4 p-4">
         <div
-            class="border-sidebar-border/70 dark:border-sidebar-border relative min-h-[100vh] flex-1 rounded-xl border md:min-h-min"
+            class="border-sidebar-border/70 dark:border-sidebar-border flex flex-1 flex-col items-center justify-center gap-4 rounded-xl border p-8 text-center"
         >
-            <PlaceholderPattern />
+            <AppLogoIcon class="text-primary size-12" />
+            <h1 class="text-2xl font-semibold tracking-tight">Migraine Map</h1>
+            <p class="text-muted-foreground">
+                Track your triggers. See your patterns.
+            </p>
         </div>
     </div>
 </template>
