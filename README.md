@@ -88,12 +88,27 @@ provided by the starter kit out of the box.
 
 ## Testing
 
-Tests run with Pest against the `migraine_map_testing` database (configured in
-`phpunit.xml`), using the credentials from `.env`.
+Tests run with Pest against the `migraine_map_testing` database.
 
 ```bash
 php artisan test
 ```
+
+`phpunit.xml` only overrides `DB_CONNECTION` and `DB_DATABASE`; the host, user
+and password still come from `.env`. To point the tests at a different server or
+user, create a `.env.testing` — Laravel loads it instead of `.env` when
+`APP_ENV=testing`, and it is git-ignored:
+
+```dotenv
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=migraine_map_testing
+DB_USERNAME=your_test_user
+DB_PASSWORD=your_test_password
+```
+
+A `.env.testing` must be complete enough to boot the app, so copy `.env` and
+edit the `DB_*` values rather than writing it from scratch.
 
 ## Checks
 
