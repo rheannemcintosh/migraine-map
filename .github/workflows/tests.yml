@@ -13,20 +13,29 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    env:
+      DB_CONNECTION: sqlsrv
+      DB_HOST: 127.0.0.1
+      DB_PORT: 1433
+      DB_USERNAME: sa
+      DB_PASSWORD: Your_strong_password123
+      DB_ENCRYPT: "yes"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+
     services:
-      postgres:
-        image: postgres:16
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
         env:
-          POSTGRES_USER: migraine_map
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: migraine_map
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Your_strong_password123
         ports:
-          - 5432:5432
+          - 1433:1433
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q 'SELECT 1' -b"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 20
+          --health-start-period 30s
 
     steps:
       - name: Checkout code
@@ -34,11 +43,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Microsoft ODBC driver
+        run: |
+          curl -fsSL -o /tmp/packages-microsoft-prod.deb https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc-dev
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.3'
-          extensions: pdo_pgsql
+          php-version: '8.4'
+          extensions: sqlsrv, pdo_sqlsrv
           tools: composer:v2
           coverage: none
 
@@ -47,8 +63,19 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Create Test Database
-        run: PGPASSWORD=password createdb -h 127.0.0.1 -U migraine_map migraine_map_testing
+      - name: Create databases
+        run: |
+          php -r '
+            $pdo = new PDO(
+              "sqlsrv:Server=127.0.0.1,1433;Database=master;Encrypt=1;TrustServerCertificate=1;LoginTimeout=30",
+              "sa",
+              getenv("DB_PASSWORD")
+            );
+            foreach (["migraine_map", "migraine_map_testing"] as $db) {
+              $pdo->exec("IF DB_ID(N\x27$db\x27) IS NULL CREATE DATABASE [$db]");
+              echo "ensured database: $db\n";
+            }
+          '
 
       - name: Setup Application
         run: composer setup
