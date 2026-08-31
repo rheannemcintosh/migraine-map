@@ -58,8 +58,17 @@ jobs:
 
       - name: Create databases
         run: |
-          sqlcmd -S 127.0.0.1 -U sa -P "$DB_PASSWORD" -C -b \
-            -Q "IF DB_ID('migraine_map') IS NULL CREATE DATABASE [migraine_map]; IF DB_ID('migraine_map_testing') IS NULL CREATE DATABASE [migraine_map_testing];"
+          php -r '
+            $pdo = new PDO(
+              "sqlsrv:Server=127.0.0.1,1433;Database=master;Encrypt=1;TrustServerCertificate=1;LoginTimeout=30",
+              "sa",
+              getenv("DB_PASSWORD")
+            );
+            foreach (["migraine_map", "migraine_map_testing"] as $db) {
+              $pdo->exec("IF DB_ID(N\x27$db\x27) IS NULL CREATE DATABASE [$db]");
+              echo "ensured database: $db\n";
+            }
+          '
 
       - name: Setup Application
         run: composer setup
