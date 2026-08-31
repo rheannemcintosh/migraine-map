@@ -35,11 +35,13 @@ no host PHP, Composer, Node or database driver setup is needed.
 cp .env.example .env
 
 # Install PHP dependencies using a throwaway Composer container (no host PHP needed).
-docker run --rm -v "$(pwd)":/var/www/html -w /var/www/html \
+# `-u` keeps vendor/ owned by you rather than root, so the app container can write to it.
+docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)":/var/www/html -w /var/www/html \
   laravelsail/php84-composer:latest composer install
 
 # Install Node dependencies (needed before the container starts Vite).
-docker run --rm -v "$(pwd)":/var/www/html -w /var/www/html \
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+  -v "$(pwd)":/var/www/html -w /var/www/html \
   node:22 npm ci
 
 # First run also builds the app image (compiles the SQL Server driver), starts
