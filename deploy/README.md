@@ -50,6 +50,7 @@ credential-free. If you prefer private, add `--registry-server ghcr.io
 ```bash
 export SQL_ADMIN_PASSWORD='<a strong password>'
 # optional: export APP_KEY='base64:...'   to reuse an existing Laravel key
+# optional: export SQL_SERVER='migraine-map-sql-1234'   to pin a specific server
 ./deploy/azure-provision.sh
 ```
 
@@ -61,9 +62,13 @@ Note the printed **App URL** and **SQL server** name. The script:
 - creates a consumption-only Container Apps environment (no Log Analytics)
 - creates the `migraine-map` container app with `min-replicas 0`, port 8080, all env
   vars/secrets, then sets `APP_URL` to the real FQDN
+- turns on Easy Auth with `unauthenticatedClientAction = Return403`, so the URL answers
+  **403 to everyone** from the moment it exists
 - creates a $1/month budget alert
 
-At this point the app is **live but PUBLIC**. Lock it down in step 5 before sharing the URL.
+Re-running is safe. The SQL server is discovered from the resource group (or taken from
+`SQL_SERVER`), and an existing database, container app, `APP_KEY` and data are reused —
+a rerun only refreshes the image and the non-secret env vars.
 
 ---
 
@@ -119,14 +124,15 @@ Portal → `migraine-map` container app → **Authentication** → **Add identit
 - **Token store**: enabled
 
 Save. This creates an Entra app registration and wires it up. Unauthenticated visitors
-are now bounced to Microsoft sign-in.
+are now bounced to Microsoft sign-in instead of getting the blanket 403.
 
 CLI equivalent (after the registration exists):
 
 ```bash
 az containerapp auth update -g rg-migraine-map -n migraine-map \
+  --enabled true \
   --unauthenticated-client-action RedirectToLoginPage \
-  --require-authentication true
+  --redirect-provider azureactivedirectory
 ```
 
 ### b. Allow only your account
@@ -156,7 +162,7 @@ redeploy so no further self-registration is possible.)
 
 **Live private URL**
 ```bash
-curl -sI https://<fqdn>/            # expect 302 to login.microsoftonline.com
+curl -sI https://<fqdn>/            # before step 5: 403; after step 5: 302 to login.microsoftonline.com
 ```
 Open in a browser → Microsoft sign-in → your account → app loads. Try an incognito window
 with a different Microsoft account → **denied**.
