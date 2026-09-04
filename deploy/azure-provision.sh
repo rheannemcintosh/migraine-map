@@ -45,16 +45,14 @@ az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output none
 
 echo "==> Azure SQL logical server"
 if [[ -z "$SQL_SERVER" ]]; then
-  # Not `mapfile` — macOS ships bash 3.2, which predates it (added in bash 4.0).
-  existing_servers=()
-  while IFS= read -r server_name; do
-    [[ -n "$server_name" ]] && existing_servers+=("$server_name")
-  done < <(az sql server list -g "$RESOURCE_GROUP" --query "[].name" -o tsv)
-  case "${#existing_servers[@]}" in
+  # Newline-separated rather than an array: macOS ships bash 3.2, where `mapfile`
+  # does not exist and `${#arr[@]}` on an empty array trips `set -u`.
+  existing_servers="$(az sql server list -g "$RESOURCE_GROUP" --query "[].name" -o tsv)"
+  case "$(printf '%s\n' "$existing_servers" | grep -c . || true)" in
     0) SQL_SERVER="migraine-map-sql-$RANDOM" ;;
-    1) SQL_SERVER="${existing_servers[0]}" ;;
+    1) SQL_SERVER="$existing_servers" ;;
     *)
-      echo "ERROR: $RESOURCE_GROUP contains several SQL servers (${existing_servers[*]})." >&2
+      echo "ERROR: $RESOURCE_GROUP contains several SQL servers ($(echo $existing_servers))." >&2
       echo "       Re-run with SQL_SERVER=<name> so the right one is reused." >&2
       exit 1
       ;;
