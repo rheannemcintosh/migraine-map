@@ -23,7 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { medications } from '@/routes';
+import { medications as medicationsRoute } from '@/routes';
 import { store } from '@/routes/medications';
 
 type Medication = {
@@ -54,7 +54,7 @@ defineOptions({
         breadcrumbs: [
             {
                 title: 'Medications',
-                href: medications(),
+                href: medicationsRoute(),
             },
         ],
     },
