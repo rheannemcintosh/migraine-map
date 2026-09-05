@@ -21,18 +21,9 @@ az login
 az extension add --name containerapp --upgrade
 az provider register --namespace Microsoft.App --wait
 az provider register --namespace Microsoft.OperationalInsights --wait
-az provider register --namespace Microsoft.Sql --wait
 ```
 
-You also need Docker locally to build and push the image — build for `linux/amd64`
-explicitly, since Container Apps can't run an arm64-only image:
-
-```bash
-docker buildx build --platform linux/amd64 -t ghcr.io/rheannemcintosh/migraine-map:latest --push .
-```
-
-(A plain `docker build` on Apple Silicon produces an arm64 image, which
-`az containerapp create`/`update` rejects with "no child with platform linux/amd64".)
+You also need Docker locally if you want to build/test the image by hand.
 
 ---
 
@@ -42,12 +33,10 @@ CI (`.github/workflows/deploy.yml`) builds and pushes on every push to `main`, b
 provisioning script needs an image to exist first. Either let CI run once, or push manually:
 
 ```bash
+docker build -t ghcr.io/rheannemcintosh/migraine-map:latest .
 echo "$GHCR_PAT" | docker login ghcr.io -u rheannemcintosh --password-stdin
-docker buildx build --platform linux/amd64 -t ghcr.io/rheannemcintosh/migraine-map:latest --push .
+docker push ghcr.io/rheannemcintosh/migraine-map:latest
 ```
-
-(GitHub Actions runners are amd64 natively, so CI-built images don't need
-`--platform`/`buildx` — this is only needed when building by hand on Apple Silicon.)
 
 Then make the package public: GitHub → your profile → Packages → `migraine-map` →
 Package settings → Change visibility → **Public**. (Keeps the container app config
