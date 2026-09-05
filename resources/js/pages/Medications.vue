@@ -108,7 +108,7 @@ const formatDose = (medication: Medication): string =>
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Medications</h1>
 
-            <Button @click="open">
+            <Button class="cursor-pointer" @click="open">
                 <Plus />
                 Add medication
             </Button>
@@ -126,7 +126,7 @@ const formatDose = (medication: Medication): string =>
                     migraine patterns later.
                 </p>
             </div>
-            <Button variant="outline" @click="open">
+            <Button variant="outline" class="cursor-pointer" @click="open">
                 <Plus />
                 Add your first medication
             </Button>
@@ -278,10 +278,19 @@ const formatDose = (medication: Medication): string =>
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="close">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="cursor-pointer"
+                        @click="close"
+                    >
                         Cancel
                     </Button>
-                    <Button type="submit" :disabled="form.processing">
+                    <Button
+                        type="submit"
+                        class="cursor-pointer"
+                        :disabled="form.processing"
+                    >
                         Save medication
                     </Button>
                 </DialogFooter>
