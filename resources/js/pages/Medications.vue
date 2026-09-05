@@ -208,7 +208,6 @@ const formatDose = (medication: Medication): string =>
                             v-model="form.dose_amount"
                             type="number"
                             inputmode="decimal"
-                            min="0"
                             step="any"
                             required
                             placeholder="e.g. 50"
