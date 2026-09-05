@@ -100,13 +100,18 @@ az role assignment create \
   --role Contributor \
   --scope "/subscriptions/$SUB_ID/resourceGroups/rg-migraine-map"
 
-# trust the GitHub repo's main branch
-az ad app federated-credential create --id "$APP_ID" --parameters '{
-  "name": "github-main",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:rheannemcintosh/migraine-map:ref:refs/heads/main",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
+# trust the GitHub repo's main branch. GitHub's OIDC subject claim isn't just
+# "repo:owner/repo:ref:..." — it includes the owner's and repo's numeric IDs
+# (immutable across renames/transfers), so build it from the API rather than
+# guessing the format.
+OWNER_ID=$(gh api users/rheannemcintosh --jq .id)
+REPO_ID=$(gh api repos/rheannemcintosh/migraine-map --jq .id)
+az ad app federated-credential create --id "$APP_ID" --parameters "{
+  \"name\": \"github-main\",
+  \"issuer\": \"https://token.actions.githubusercontent.com\",
+  \"subject\": \"repo:rheannemcintosh@${OWNER_ID}/migraine-map@${REPO_ID}:ref:refs/heads/main\",
+  \"audiences\": [\"api://AzureADTokenExchange\"]
+}"
 
 echo "AZURE_CLIENT_ID       = $APP_ID"
 echo "AZURE_TENANT_ID       = $(az account show --query tenantId -o tsv)"
