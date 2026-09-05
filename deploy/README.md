@@ -49,10 +49,9 @@ docker buildx build --platform linux/amd64 -t ghcr.io/rheannemcintosh/migraine-m
 (GitHub Actions runners are amd64 natively, so CI-built images don't need
 `--platform`/`buildx` — this is only needed when building by hand on Apple Silicon.)
 
-Then make the package public: GitHub → your profile → Packages → `migraine-map` →
-Package settings → Change visibility → **Public**. (Keeps the container app config
-credential-free. If you prefer private, add `--registry-server ghcr.io
---registry-username ... --registry-password ...` to the `az containerapp create` call.)
+The package can stay **private** — `azure-provision.sh` gives the container app a pull
+credential when `GHCR_USERNAME`/`GHCR_PAT` are set (see step 3). A token with
+`read:packages` is enough; it doesn't need to be the same one used to push.
 
 ---
 
@@ -62,6 +61,9 @@ credential-free. If you prefer private, add `--registry-server ghcr.io
 export SQL_ADMIN_PASSWORD='<a strong password>'
 # optional: export APP_KEY='base64:...'   to reuse an existing Laravel key
 # optional: export SQL_SERVER='migraine-map-sql-1234'   to pin a specific server
+# needed only if the ghcr.io package is private:
+export GHCR_USERNAME='rheannemcintosh'
+export GHCR_PAT='<a token with read:packages>'
 ./deploy/azure-provision.sh
 ```
 
@@ -114,10 +116,15 @@ echo "AZURE_SUBSCRIPTION_ID = $SUB_ID"
 Add those three as **repository secrets** (Settings → Secrets and variables → Actions):
 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 
-Run the `deploy` workflow once manually (Actions → deploy → Run workflow) to confirm it
-builds, pushes to ghcr, and updates the container app. Then edit
-`.github/workflows/deploy.yml` and uncomment the `push` trigger so every merge to `main`
-deploys automatically.
+`.github/workflows/deploy.yml` triggers on every push to `main`, so once the secrets
+are set, merging deploys automatically. Run it once manually first (Actions → deploy →
+Run workflow) to confirm the whole chain — build, push to ghcr, `az containerapp
+update` — actually works before relying on it.
+
+If the ghcr.io package is private (§2), the deploy workflow itself doesn't need
+credentials to *push* — `secrets.GITHUB_TOKEN` already has `packages: write` on its
+own repo. Only the container app's ability to *pull* needs the `GHCR_USERNAME`/
+`GHCR_PAT` credential set up in §3.
 
 ---
 
