@@ -64,7 +64,8 @@ const isOpen = ref(false);
 
 const form = useForm<{
     name: string;
-    dose_amount: string;
+    // `<Input type="number">` makes v-model store a number, or '' when the field is empty.
+    dose_amount: number | '';
     dose_unit: string;
     frequency: string;
     is_prescription: boolean;
@@ -97,13 +98,9 @@ const validate = (): boolean => {
         form.setError('name', 'The name field is required.');
     }
 
-    const dose = Number(form.dose_amount);
-
-    if (form.dose_amount.trim() === '') {
+    if (form.dose_amount === '') {
         form.setError('dose_amount', 'The dose amount field is required.');
-    } else if (Number.isNaN(dose)) {
-        form.setError('dose_amount', 'The dose amount field must be a number.');
-    } else if (dose <= 0) {
+    } else if (form.dose_amount <= 0) {
         form.setError(
             'dose_amount',
             'The dose amount field must be greater than 0.',
