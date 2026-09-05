@@ -199,8 +199,8 @@ const formatDose = (medication: Medication): string =>
                     <InputError :message="form.errors.name" />
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="grid gap-2">
+                <div class="grid grid-cols-2 items-start gap-4">
+                    <div class="grid content-start gap-2">
                         <Label for="dose_amount">Dose</Label>
                         <Input
                             id="dose_amount"
@@ -213,7 +213,7 @@ const formatDose = (medication: Medication): string =>
                         <InputError :message="form.errors.dose_amount" />
                     </div>
 
-                    <div class="grid gap-2">
+                    <div class="grid content-start gap-2">
                         <Label for="dose_unit">Unit</Label>
                         <Select v-model="form.dose_unit">
                             <SelectTrigger id="dose_unit" class="w-full">
