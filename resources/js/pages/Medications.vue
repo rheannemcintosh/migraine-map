@@ -90,7 +90,34 @@ const close = (): void => {
     form.clearErrors();
 };
 
+const validate = (): boolean => {
+    form.clearErrors();
+
+    if (form.name.trim() === '') {
+        form.setError('name', 'The name field is required.');
+    }
+
+    const dose = Number(form.dose_amount);
+
+    if (form.dose_amount.trim() === '') {
+        form.setError('dose_amount', 'The dose amount field is required.');
+    } else if (Number.isNaN(dose)) {
+        form.setError('dose_amount', 'The dose amount field must be a number.');
+    } else if (dose <= 0) {
+        form.setError(
+            'dose_amount',
+            'The dose amount field must be greater than 0.',
+        );
+    }
+
+    return !form.hasErrors;
+};
+
 const submit = (): void => {
+    if (!validate()) {
+        return;
+    }
+
     form.post(store.url(), {
         preserveScroll: true,
         onSuccess: () => close(),
