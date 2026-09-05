@@ -1,13 +1,10 @@
 name: deploy
 
-# Manual only until the Azure resources exist and the AZURE_* secrets are set
-# (see deploy/README.md §4). After the first successful provision + deploy,
-# uncomment the `push` trigger below so merges to main deploy automatically.
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
 
 concurrency:
   group: deploy-${{ github.ref }}

@@ -8,7 +8,10 @@
 #   - az CLI logged in:  az login
 #   - az extension add --name containerapp --upgrade
 #   - A container image already pushed to ghcr.io (see .github/workflows/deploy.yml,
-#     or push one manually first) and the ghcr package set to Public.
+#     or push one manually first).
+#   - The ghcr.io package can be private — set GHCR_USERNAME/GHCR_PAT (a token with
+#     read:packages) and this script gives the container app pull credentials. Leave
+#     both unset only if the package is public.
 #
 # Re-running is safe: existing resources are reused, never replaced. The SQL server
 # is discovered from the resource group, the database and container app are left
@@ -38,6 +41,10 @@ SQL_ADMIN_PASSWORD="${SQL_ADMIN_PASSWORD:?Set SQL_ADMIN_PASSWORD env var to a st
 ACA_ENV="migraine-map-env"
 ACA_APP="migraine-map"
 IMAGE="ghcr.io/rheannemcintosh/migraine-map:latest"
+
+# Only needed if the ghcr.io package is private.
+GHCR_USERNAME="${GHCR_USERNAME:-}"
+GHCR_PAT="${GHCR_PAT:-}"
 
 # ----------------------------------------------------------------------------
 echo "==> Resource group"
@@ -149,11 +156,26 @@ if az containerapp show -g "$RESOURCE_GROUP" -n "$ACA_APP" --output none 2>/dev/
     --resource-group "$RESOURCE_GROUP" \
     --secrets "db-password=$SQL_ADMIN_PASSWORD" \
     --output none
+  if [[ -n "$GHCR_PAT" ]]; then
+    echo "==> Refreshing ghcr.io pull credential"
+    az containerapp registry set \
+      --name "$ACA_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --server ghcr.io \
+      --username "$GHCR_USERNAME" \
+      --password "$GHCR_PAT" \
+      --output none
+  fi
 else
   FIRST_PROVISION=true
   # Generated once, on the very first provision. A rerun never reaches this branch,
   # so sessions and encrypted payloads survive.
   APP_KEY="${APP_KEY:-base64:$(openssl rand -base64 32)}"
+
+  REGISTRY_ARGS=()
+  if [[ -n "$GHCR_PAT" ]]; then
+    REGISTRY_ARGS=(--registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT")
+  fi
 
   echo "==> Container app (scale-to-zero)"
   az containerapp create \
@@ -168,6 +190,7 @@ else
     --cpu 0.5 --memory 1.0Gi \
     --secrets "app-key=$APP_KEY" "db-password=$SQL_ADMIN_PASSWORD" \
     --env-vars "${ENV_VARS[@]}" \
+    "${REGISTRY_ARGS[@]}" \
     --output none
 
   echo "==> Deny all unauthenticated traffic until an identity provider is configured"
