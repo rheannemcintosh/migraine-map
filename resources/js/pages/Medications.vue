@@ -193,7 +193,6 @@ const formatDose = (medication: Medication): string =>
                         id="name"
                         v-model="form.name"
                         type="text"
-                        required
                         autofocus
                         placeholder="e.g. Sumatriptan"
                     />
@@ -209,7 +208,6 @@ const formatDose = (medication: Medication): string =>
                             type="number"
                             inputmode="decimal"
                             step="any"
-                            required
                             placeholder="e.g. 50"
                         />
                         <InputError :message="form.errors.dose_amount" />
