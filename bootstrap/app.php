@@ -15,6 +15,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind Azure Container Apps' ingress, the app only ever receives plain
+        // HTTP from the platform's own proxy — trust it to report the real
+        // scheme/host via X-Forwarded-*, otherwise Laravel builds http:// asset
+        // URLs on an https:// page (blocked as mixed content) and secure-cookie
+        // checks fail. Safe to trust unconditionally: nothing else can reach the
+        // container directly.
+        $middleware->trustProxies(at: '*');
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
