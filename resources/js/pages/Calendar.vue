@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, Pill } from '@lucide/vue';
+import { ChevronLeft, ChevronRight } from '@lucide/vue';
+import PillIcon from '@/components/PillIcon.vue';
 import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -217,7 +218,7 @@ const formattedSelectedDate = computed(() =>
 <template>
     <Head :title="`Calendar ${year}`" />
 
-    <div class="flex h-full flex-1 flex-col gap-4 p-4">
+    <div class="mx-auto flex h-full w-full max-w-lg flex-1 flex-col gap-4 p-4">
         <div class="flex items-center justify-between">
             <Button as-child variant="outline" size="icon">
                 <Link
@@ -241,7 +242,9 @@ const formattedSelectedDate = computed(() =>
         </div>
 
         <div class="overflow-x-auto">
-            <table class="w-full table-fixed border-separate border-spacing-1">
+            <table
+                class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
+            >
                 <thead>
                     <tr>
                         <th class="w-8"></th>
@@ -265,7 +268,7 @@ const formattedSelectedDate = computed(() =>
                             <button
                                 v-if="cell.kind === 'unscored'"
                                 type="button"
-                                class="flex h-7 w-full items-center justify-center rounded text-xs"
+                                class="flex aspect-square w-full items-center justify-center rounded text-xs"
                                 :class="cellClass[cell.kind]"
                                 :aria-label="`Log score for ${cell.date}`"
                                 :data-date="cell.date"
@@ -273,7 +276,7 @@ const formattedSelectedDate = computed(() =>
                             />
                             <div
                                 v-else
-                                class="relative flex h-7 w-full items-center justify-center rounded text-xs font-semibold"
+                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
                                 :class="cellClass[cell.kind]"
                                 :data-date="
                                     cell.kind === 'nonexistent'
@@ -292,13 +295,15 @@ const formattedSelectedDate = computed(() =>
                                         : undefined
                                 "
                             >
-                                {{ cell.kind === 'scored' ? cell.score : '' }}
-                                <Pill
+                                <span>{{
+                                    cell.kind === 'scored' ? cell.score : ''
+                                }}</span>
+                                <PillIcon
                                     v-if="
                                         cell.kind === 'scored' &&
                                         cell.tookMedication
                                     "
-                                    class="absolute top-0.5 right-0.5 size-2.5"
+                                    class="absolute top-0.5 right-0.5 size-1.5"
                                     aria-label="Medication taken"
                                 />
                             </div>
@@ -322,7 +327,7 @@ const formattedSelectedDate = computed(() =>
                 <span
                     class="flex size-3 items-center justify-center rounded bg-emerald-500 text-white"
                 >
-                    <Pill class="size-2" aria-hidden="true" />
+                    <PillIcon class="size-2" aria-hidden="true" />
                 </span>
                 Medication taken
             </span>
@@ -383,7 +388,7 @@ const formattedSelectedDate = computed(() =>
                         <li
                             v-for="medication in medications"
                             :key="medication.id"
-                            class="flex items-center gap-3"
+                            class="flex min-h-9 items-center gap-3"
                         >
                             <Checkbox
                                 :id="`medication-${medication.id}`"
