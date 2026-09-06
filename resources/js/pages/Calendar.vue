@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import PillIcon from '@/components/PillIcon.vue';
 import { computed, ref } from 'vue';
@@ -18,6 +18,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { calendar } from '@/routes';
 import { store, update } from '@/routes/migraine-scores';
+import {
+    destroy as destroyConfirmation,
+    store as storeConfirmation,
+} from '@/routes/medication-confirmations';
 
 type Medication = {
     id: number;
@@ -32,6 +36,15 @@ type RecordedMedication = {
     quantity: number;
 };
 
+type ScheduledDose = {
+    scheduleId: number;
+    medicationId: number;
+    name: string;
+    dose: string;
+    label: string;
+    confirmationId: number | null;
+};
+
 type Props = {
     year: number;
     today: string;
@@ -40,12 +53,14 @@ type Props = {
     medicationDays: string[];
     medicationsByDay: Record<string, RecordedMedication[]>;
     medications: Medication[];
+    scheduledDosesByDay: Record<string, ScheduledDose[]>;
+    missedMedicationDays: string[];
 };
 
 type DayCell =
     | { kind: 'nonexistent'; key: string }
     | { kind: 'future'; key: string; date: string }
-    | { kind: 'unscored'; key: string; date: string }
+    | { kind: 'unscored'; key: string; date: string; missedMedication: boolean }
     | {
           kind: 'scored';
           key: string;
@@ -53,6 +68,7 @@ type DayCell =
           id: number;
           score: number;
           tookMedication: boolean;
+          missedMedication: boolean;
           medications: RecordedMedication[];
       };
 
@@ -97,6 +113,9 @@ const daysInMonth = (year: number, month: number): number =>
     new Date(year, month + 1, 0).getDate();
 
 const medicationDaySet = computed(() => new Set(props.medicationDays));
+const missedMedicationDaySet = computed(
+    () => new Set(props.missedMedicationDays),
+);
 
 const rows = computed<DayCell[][]>(() =>
     Array.from({ length: 31 }, (_, dayIndex) => {
@@ -123,11 +142,17 @@ const rows = computed<DayCell[][]>(() =>
                     id: props.scoreIds[key],
                     score,
                     tookMedication: medicationDaySet.value.has(key),
+                    missedMedication: missedMedicationDaySet.value.has(key),
                     medications: props.medicationsByDay[key] ?? [],
                 };
             }
 
-            return { kind: 'unscored', key, date: key };
+            return {
+                kind: 'unscored',
+                key,
+                date: key,
+                missedMedication: missedMedicationDaySet.value.has(key),
+            };
         });
     }),
 );
@@ -138,6 +163,51 @@ const cellClass: Record<DayCell['kind'], string> = {
     unscored:
         'cursor-pointer bg-red-500 text-white hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-ring',
     scored: 'cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-ring',
+};
+
+const missedMedicationClass =
+    'cursor-pointer bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-2 focus-visible:ring-ring';
+
+const classFor = (cell: DayCell): string =>
+    (cell.kind === 'unscored' || cell.kind === 'scored') &&
+    cell.missedMedication
+        ? missedMedicationClass
+        : cellClass[cell.kind];
+
+const scheduledDosesFor = (date: string | null): ScheduledDose[] =>
+    date === null ? [] : (props.scheduledDosesByDay[date] ?? []);
+
+const pendingDoseKey = ref<string | null>(null);
+
+const doseKey = (date: string, dose: ScheduledDose): string =>
+    `${date}:${dose.scheduleId}`;
+
+const toggleDose = (
+    date: string,
+    dose: ScheduledDose,
+    taken: boolean,
+): void => {
+    if (pendingDoseKey.value !== null) {
+        return;
+    }
+
+    pendingDoseKey.value = doseKey(date, dose);
+
+    const options = {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => (pendingDoseKey.value = null),
+    };
+
+    if (taken) {
+        router.post(
+            storeConfirmation.url(),
+            { medication_schedule_id: dose.scheduleId, date },
+            options,
+        );
+    } else if (dose.confirmationId !== null) {
+        router.delete(destroyConfirmation.url(dose.confirmationId), options);
+    }
 };
 
 const selectedDate = ref<string | null>(null);
@@ -373,22 +443,33 @@ const formattedSelectedDate = computed(() =>
                                 v-if="cell.kind === 'unscored'"
                                 type="button"
                                 class="flex aspect-square w-full items-center justify-center rounded text-xs"
-                                :class="cellClass[cell.kind]"
+                                :class="classFor(cell)"
                                 :aria-label="`Log score for ${cell.date}`"
                                 :data-date="cell.date"
+                                :data-missed-medication="
+                                    cell.missedMedication ? 'true' : undefined
+                                "
+                                :title="
+                                    cell.missedMedication
+                                        ? `${cell.date}: scheduled medication missing`
+                                        : undefined
+                                "
                                 @click="openDay(cell)"
                             />
                             <button
                                 v-else-if="cell.kind === 'scored'"
                                 type="button"
                                 class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="cellClass[cell.kind]"
+                                :class="classFor(cell)"
                                 :aria-label="`Edit score for ${cell.date}`"
                                 :data-date="cell.date"
                                 :data-medication="
                                     cell.tookMedication ? 'true' : undefined
                                 "
-                                :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}`"
+                                :data-missed-medication="
+                                    cell.missedMedication ? 'true' : undefined
+                                "
+                                :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', scheduled medication missing' : ''}`"
                                 @click="openScored(cell)"
                             >
                                 <span>{{ cell.score }}</span>
@@ -423,6 +504,10 @@ const formattedSelectedDate = computed(() =>
             </span>
             <span class="flex items-center gap-1.5">
                 <span class="size-3 rounded bg-emerald-500" /> Scored
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span class="size-3 rounded bg-orange-500" /> Scheduled
+                medication missing
             </span>
             <span class="flex items-center gap-1.5">
                 <span
@@ -530,6 +615,53 @@ const formattedSelectedDate = computed(() =>
                         </li>
                     </ul>
                     <InputError :message="medicationError" />
+                </fieldset>
+
+                <fieldset
+                    v-if="
+                        selectedDate && scheduledDosesFor(selectedDate).length
+                    "
+                    class="space-y-2"
+                >
+                    <legend class="text-sm font-medium">
+                        Scheduled medications
+                    </legend>
+                    <p class="text-muted-foreground text-xs">
+                        Tick each dose as you take it. These are saved
+                        immediately.
+                    </p>
+                    <ul class="space-y-2">
+                        <li
+                            v-for="dose in scheduledDosesFor(selectedDate)"
+                            :key="dose.scheduleId"
+                            class="flex min-h-9 items-center gap-3"
+                        >
+                            <Checkbox
+                                :id="`dose-${dose.scheduleId}`"
+                                :model-value="dose.confirmationId !== null"
+                                :disabled="pendingDoseKey !== null"
+                                @update:model-value="
+                                    (checked) =>
+                                        toggleDose(
+                                            selectedDate!,
+                                            dose,
+                                            checked === true,
+                                        )
+                                "
+                            />
+                            <Label
+                                :for="`dose-${dose.scheduleId}`"
+                                class="flex flex-1 flex-col items-start gap-0"
+                            >
+                                <span>{{ dose.name }}</span>
+                                <span
+                                    class="text-muted-foreground text-xs font-normal"
+                                >
+                                    {{ dose.dose }} &middot; {{ dose.label }}
+                                </span>
+                            </Label>
+                        </li>
+                    </ul>
                 </fieldset>
 
                 <DialogFooter>
@@ -641,6 +773,51 @@ const formattedSelectedDate = computed(() =>
                         </li>
                     </ul>
                     <InputError :message="editMedicationError" />
+                </fieldset>
+
+                <fieldset
+                    v-if="scheduledDosesFor(editingCell.date).length"
+                    class="space-y-2"
+                >
+                    <legend class="text-sm font-medium">
+                        Scheduled medications
+                    </legend>
+                    <p class="text-muted-foreground text-xs">
+                        Tick each dose as you take it. These are saved
+                        immediately.
+                    </p>
+                    <ul class="space-y-2">
+                        <li
+                            v-for="dose in scheduledDosesFor(editingCell.date)"
+                            :key="dose.scheduleId"
+                            class="flex min-h-9 items-center gap-3"
+                        >
+                            <Checkbox
+                                :id="`edit-dose-${dose.scheduleId}`"
+                                :model-value="dose.confirmationId !== null"
+                                :disabled="pendingDoseKey !== null"
+                                @update:model-value="
+                                    (checked) =>
+                                        toggleDose(
+                                            editingCell!.date,
+                                            dose,
+                                            checked === true,
+                                        )
+                                "
+                            />
+                            <Label
+                                :for="`edit-dose-${dose.scheduleId}`"
+                                class="flex flex-1 flex-col items-start gap-0"
+                            >
+                                <span>{{ dose.name }}</span>
+                                <span
+                                    class="text-muted-foreground text-xs font-normal"
+                                >
+                                    {{ dose.dose }} &middot; {{ dose.label }}
+                                </span>
+                            </Label>
+                        </li>
+                    </ul>
                 </fieldset>
 
                 <DialogFooter>
