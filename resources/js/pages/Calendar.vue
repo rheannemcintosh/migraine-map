@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
+import DayLogForm from '@/components/DayLogForm.vue';
 import PillIcon from '@/components/PillIcon.vue';
 import { computed, ref } from 'vue';
-import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -14,10 +13,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { calendar } from '@/routes';
-import { store, update } from '@/routes/migraine-scores';
 
 type Medication = {
     id: number;
@@ -56,11 +52,6 @@ type DayCell =
           medications: RecordedMedication[];
       };
 
-type MedicationTaken = {
-    id: number;
-    quantity: number;
-};
-
 const props = defineProps<Props>();
 
 defineOptions({
@@ -88,8 +79,6 @@ const MONTHS = [
     'Nov',
     'Dec',
 ];
-
-const SCORE_OPTIONS = Array.from({ length: 11 }, (_, i) => i);
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
@@ -150,85 +139,16 @@ const isOpen = computed({
     },
 });
 
-const form = useForm<{
-    date: string;
-    score: number | null;
-    medications: MedicationTaken[];
-}>({
-    date: '',
-    score: null,
-    medications: [],
-});
-
-/**
- * Build the checkbox / quantity helpers for a medications list, so the
- * "Log your day" and "Edit day" dialogs can share the same picker.
- */
-const medicationPicker = (
-    get: () => MedicationTaken[],
-    set: (medications: MedicationTaken[]) => void,
-) => ({
-    isSelected: (medication: Medication): boolean =>
-        get().some((taken) => taken.id === medication.id),
-    quantityFor: (medication: Medication): number =>
-        get().find((taken) => taken.id === medication.id)?.quantity ?? 1,
-    toggle: (medication: Medication, checked: boolean): void => {
-        set(
-            checked
-                ? [...get(), { id: medication.id, quantity: 1 }]
-                : get().filter((taken) => taken.id !== medication.id),
-        );
-    },
-    setQuantity: (medication: Medication, value: string | number): void => {
-        const quantity = Math.max(1, Math.floor(Number(value)) || 1);
-
-        set(
-            get().map((taken) =>
-                taken.id === medication.id ? { ...taken, quantity } : taken,
-            ),
-        );
-    },
-});
-
-const firstMedicationError = (
-    errors: Record<string, string | undefined>,
-): string | undefined =>
-    Object.keys(errors)
-        .filter((key) => key.startsWith('medications'))
-        .map((key) => errors[key])
-        .find((message) => message !== undefined);
-
-const logMeds = medicationPicker(
-    () => form.medications,
-    (medications) => (form.medications = medications),
-);
-
-const medicationError = computed(() =>
-    firstMedicationError(form.errors as Record<string, string | undefined>),
-);
-
 const openDay = (cell: DayCell): void => {
     if (cell.kind !== 'unscored') {
         return;
     }
 
-    form.reset();
-    form.clearErrors();
-    form.date = cell.date;
     selectedDate.value = cell.date;
 };
 
 const close = (): void => {
     selectedDate.value = null;
-    form.reset();
-    form.clearErrors();
-};
-
-const submit = (): void => {
-    form.post(store.url(), {
-        preserveScroll: true,
-        onSuccess: () => close(),
-    });
 };
 
 const editingCell = ref<Extract<DayCell, { kind: 'scored' }> | null>(null);
@@ -241,53 +161,16 @@ const isEditOpen = computed({
     },
 });
 
-const editForm = useForm<{
-    score: number | null;
-    medications: MedicationTaken[];
-}>({
-    score: null,
-    medications: [],
-});
-
-const editMeds = medicationPicker(
-    () => editForm.medications,
-    (medications) => (editForm.medications = medications),
-);
-
-const editMedicationError = computed(() =>
-    firstMedicationError(editForm.errors as Record<string, string | undefined>),
-);
-
 const openScored = (cell: DayCell): void => {
     if (cell.kind !== 'scored') {
         return;
     }
 
-    editForm.reset();
-    editForm.clearErrors();
-    editForm.score = cell.score;
-    editForm.medications = cell.medications.map((taken) => ({
-        id: taken.id,
-        quantity: taken.quantity,
-    }));
     editingCell.value = cell;
 };
 
 const closeEdit = (): void => {
     editingCell.value = null;
-    editForm.reset();
-    editForm.clearErrors();
-};
-
-const submitEdit = (): void => {
-    if (editingCell.value === null) {
-        return;
-    }
-
-    editForm.patch(update.url(editingCell.value.id), {
-        preserveScroll: true,
-        onSuccess: () => closeEdit(),
-    });
 };
 
 const formattedEditDate = computed(() =>
@@ -452,98 +335,28 @@ const formattedSelectedDate = computed(() =>
                 </DialogDescription>
             </DialogHeader>
 
-            <form class="space-y-4" @submit.prevent="submit">
-                <div
-                    class="grid grid-cols-6 gap-2 sm:grid-cols-11"
-                    role="radiogroup"
-                    aria-label="Score"
-                >
-                    <Button
-                        v-for="option in SCORE_OPTIONS"
-                        :key="option"
-                        type="button"
-                        role="radio"
-                        :aria-checked="form.score === option"
-                        :variant="form.score === option ? 'default' : 'outline'"
-                        size="icon"
-                        @click="form.score = option"
-                    >
-                        {{ option }}
-                    </Button>
-                </div>
-                <InputError :message="form.errors.score" />
-                <InputError :message="form.errors.date" />
-
-                <fieldset class="space-y-2">
-                    <legend class="text-sm font-medium">
-                        Medications taken
-                    </legend>
-                    <p
-                        v-if="medications.length === 0"
-                        class="text-muted-foreground text-sm"
-                    >
-                        No ad hoc medications declared yet. Add them on the
-                        Medications page to record them here.
-                    </p>
-                    <ul v-else class="space-y-2">
-                        <li
-                            v-for="medication in medications"
-                            :key="medication.id"
-                            class="flex min-h-9 items-center gap-3"
-                        >
-                            <Checkbox
-                                :id="`medication-${medication.id}`"
-                                :model-value="logMeds.isSelected(medication)"
-                                @update:model-value="
-                                    (checked) =>
-                                        logMeds.toggle(
-                                            medication,
-                                            checked === true,
-                                        )
-                                "
-                            />
-                            <Label
-                                :for="`medication-${medication.id}`"
-                                class="flex flex-1 flex-col items-start gap-0"
-                            >
-                                <span>{{ medication.name }}</span>
-                                <span
-                                    class="text-muted-foreground text-xs font-normal"
-                                >
-                                    {{ medication.dose }}
-                                </span>
-                            </Label>
-                            <Input
-                                v-if="logMeds.isSelected(medication)"
-                                type="number"
-                                inputmode="numeric"
-                                min="1"
-                                step="1"
-                                class="w-20"
-                                :aria-label="`Number of ${medication.name} taken`"
-                                :model-value="logMeds.quantityFor(medication)"
-                                @update:model-value="
-                                    (value) =>
-                                        logMeds.setQuantity(medication, value)
-                                "
-                            />
-                        </li>
-                    </ul>
-                    <InputError :message="medicationError" />
-                </fieldset>
-
-                <DialogFooter>
-                    <Button type="button" variant="outline" @click="close">
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        :disabled="form.score === null || form.processing"
-                    >
-                        Save
-                    </Button>
-                </DialogFooter>
-            </form>
+            <DayLogForm
+                v-if="selectedDate"
+                :key="selectedDate"
+                :date="selectedDate"
+                :score-id="null"
+                :score="null"
+                :medications="medications"
+                :recorded="[]"
+                id-prefix="medication"
+                @saved="close"
+            >
+                <template #actions="{ submittable }">
+                    <DialogFooter>
+                        <Button type="button" variant="outline" @click="close">
+                            Cancel
+                        </Button>
+                        <Button type="submit" :disabled="!submittable">
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </template>
+            </DayLogForm>
         </DialogContent>
     </Dialog>
 
@@ -558,105 +371,32 @@ const formattedSelectedDate = computed(() =>
                 </DialogDescription>
             </DialogHeader>
 
-            <form
+            <DayLogForm
                 v-if="editingCell"
-                class="space-y-4"
-                @submit.prevent="submitEdit"
+                :key="editingCell.id"
+                :date="editingCell.date"
+                :score-id="editingCell.id"
+                :score="editingCell.score"
+                :medications="medications"
+                :recorded="editingCell.medications"
+                id-prefix="edit-medication"
+                @saved="closeEdit"
             >
-                <div
-                    class="grid grid-cols-6 gap-2 sm:grid-cols-11"
-                    role="radiogroup"
-                    aria-label="Score"
-                >
-                    <Button
-                        v-for="option in SCORE_OPTIONS"
-                        :key="option"
-                        type="button"
-                        role="radio"
-                        :aria-checked="editForm.score === option"
-                        :variant="
-                            editForm.score === option ? 'default' : 'outline'
-                        "
-                        size="icon"
-                        @click="editForm.score = option"
-                    >
-                        {{ option }}
-                    </Button>
-                </div>
-                <InputError :message="editForm.errors.score" />
-
-                <fieldset class="space-y-2">
-                    <legend class="text-sm font-medium">
-                        Medications taken
-                    </legend>
-                    <p
-                        v-if="medications.length === 0"
-                        class="text-muted-foreground text-sm"
-                    >
-                        No ad hoc medications declared yet. Add them on the
-                        Medications page to record them here.
-                    </p>
-                    <ul v-else class="space-y-2">
-                        <li
-                            v-for="medication in medications"
-                            :key="medication.id"
-                            class="flex min-h-9 items-center gap-3"
+                <template #actions="{ submittable }">
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="closeEdit"
                         >
-                            <Checkbox
-                                :id="`edit-medication-${medication.id}`"
-                                :model-value="editMeds.isSelected(medication)"
-                                @update:model-value="
-                                    (checked) =>
-                                        editMeds.toggle(
-                                            medication,
-                                            checked === true,
-                                        )
-                                "
-                            />
-                            <Label
-                                :for="`edit-medication-${medication.id}`"
-                                class="flex flex-1 flex-col items-start gap-0"
-                            >
-                                <span>{{ medication.name }}</span>
-                                <span
-                                    class="text-muted-foreground text-xs font-normal"
-                                >
-                                    {{ medication.dose }}
-                                </span>
-                            </Label>
-                            <Input
-                                v-if="editMeds.isSelected(medication)"
-                                type="number"
-                                inputmode="numeric"
-                                min="1"
-                                step="1"
-                                class="w-20"
-                                :aria-label="`Number of ${medication.name} taken`"
-                                :model-value="editMeds.quantityFor(medication)"
-                                @update:model-value="
-                                    (value) =>
-                                        editMeds.setQuantity(medication, value)
-                                "
-                            />
-                        </li>
-                    </ul>
-                    <InputError :message="editMedicationError" />
-                </fieldset>
-
-                <DialogFooter>
-                    <Button type="button" variant="outline" @click="closeEdit">
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        :disabled="
-                            editForm.score === null || editForm.processing
-                        "
-                    >
-                        Save
-                    </Button>
-                </DialogFooter>
-            </form>
+                            Cancel
+                        </Button>
+                        <Button type="submit" :disabled="!submittable">
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </template>
+            </DayLogForm>
         </DialogContent>
     </Dialog>
 </template>
