@@ -32,7 +32,6 @@ test('the medications page lists only the user\'s medications with the form opti
                 ->where('dose_amount', 50)
                 ->where('dose_unit', 'mg')
                 ->where('frequency', 'ad_hoc')
-                ->where('frequency_label', 'Ad hoc (as needed)')
                 ->where('is_prescription', true)
                 ->where('is_active', true)
                 ->etc()

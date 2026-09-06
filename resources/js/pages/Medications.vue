@@ -32,7 +32,6 @@ type Medication = {
     dose_amount: number;
     dose_unit: string;
     frequency: string;
-    frequency_label: string;
     is_prescription: boolean;
     is_active: boolean;
 };
@@ -48,7 +47,10 @@ type Props = {
     frequencies: FrequencyOption[];
 };
 
-defineProps<Props>();
+const props = defineProps<Props>();
+
+const frequencyLabel = (value: string): string =>
+    props.frequencies.find((option) => option.value === value)?.label ?? value;
 
 defineOptions({
     layout: {
@@ -250,7 +252,7 @@ const formatDose = (medication: Medication): string =>
                     <div class="flex justify-between gap-2">
                         <dt>Frequency</dt>
                         <dd class="text-foreground">
-                            {{ medication.frequency_label }}
+                            {{ frequencyLabel(medication.frequency) }}
                         </dd>
                     </div>
                     <div class="flex justify-between gap-2">

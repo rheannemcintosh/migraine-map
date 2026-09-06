@@ -29,7 +29,6 @@ class MedicationController extends Controller
                 'dose_amount' => (float) $medication->dose_amount,
                 'dose_unit' => $medication->dose_unit->value,
                 'frequency' => $medication->frequency->value,
-                'frequency_label' => $medication->frequency->label(),
                 'is_prescription' => $medication->is_prescription,
                 'is_active' => $medication->is_active,
             ]);
