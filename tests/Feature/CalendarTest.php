@@ -145,6 +145,85 @@ test('the calendar lists active ad hoc medications and the days medication was t
         );
 });
 
+test('the score of a logged migraine can be edited', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), ['score' => 8])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('calendar', ['year' => 2026]));
+
+    expect($score->fresh()->score)->toBe(8);
+});
+
+test('editing a score does not touch the recorded medications', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $medication = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    MedicationIntake::factory()->for($user)->for($medication)->create(['date' => '2026-03-10', 'quantity' => 3]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), ['score' => 1])
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('medication_intakes', [
+        'user_id' => $user->id,
+        'medication_id' => $medication->id,
+        'quantity' => 3,
+    ]);
+    expect($user->medicationIntakes()->count())->toBe(1);
+});
+
+test('an edited score must be an integer between 0 and 10', function (mixed $score) {
+    $user = User::factory()->create();
+    $logged = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $logged), ['score' => $score])
+        ->assertSessionHasErrors('score');
+
+    expect($logged->fresh()->score)->toBe(4);
+})->with([-1, 11, 2.5, 'high', null]);
+
+test('a user cannot edit another user\'s score', function () {
+    $score = MigraineScore::factory()->create(['date' => '2026-03-10', 'score' => 4]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), ['score' => 9])
+        ->assertForbidden();
+
+    expect($score->fresh()->score)->toBe(4);
+});
+
+test('the calendar exposes score ids and the medications recorded each day', function () {
+    Carbon::setTestNow('2026-06-15');
+
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $ibuprofen = Medication::factory()->for($user)->create([
+        'name' => 'Ibuprofen',
+        'dose_amount' => 400,
+        'dose_unit' => DoseUnit::Milligram,
+        'frequency' => MedicationFrequency::AdHoc,
+    ]);
+    MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-03-10', 'quantity' => 2]);
+
+    $this->actingAs($user)
+        ->get(route('calendar'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Calendar')
+            ->where('scoreIds', ['2026-03-10' => $score->id])
+            ->where('medicationsByDay', [
+                '2026-03-10' => [
+                    ['name' => 'Ibuprofen', 'dose' => '400 mg', 'quantity' => 2],
+                ],
+            ])
+        );
+});
+
 test('medications taken can be saved alongside the score', function () {
     Carbon::setTestNow('2026-06-15');
     $user = User::factory()->create();

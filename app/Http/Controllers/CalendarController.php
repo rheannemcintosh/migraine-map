@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Enums\MedicationFrequency;
 use App\Http\Requests\StoreMigraineScoreRequest;
+use App\Http\Requests\UpdateMigraineScoreRequest;
 use App\Models\Medication;
+use App\Models\MedicationIntake;
 use App\Models\MigraineScore;
-use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,14 +33,36 @@ class CalendarController extends Controller
             ])
             ->all();
 
-        /** @var array<int, string> $medicationDays */
-        $medicationDays = $request->user()
+        /** @var array<string, int> $scoreIds */
+        $scoreIds = $request->user()
+            ->migraineScores()
+            ->whereYear('date', $year)
+            ->pluck('id', 'date')
+            ->mapWithKeys(fn (int $id, string $date): array => [
+                substr($date, 0, 10) => $id,
+            ])
+            ->all();
+
+        $intakesByDay = $request->user()
             ->medicationIntakes()
             ->whereYear('date', $year)
-            ->distinct()
-            ->pluck('date')
-            ->map(fn (CarbonInterface $date): string => $date->toDateString())
-            ->values()
+            ->with('medication')
+            ->get()
+            ->groupBy(fn (MedicationIntake $intake): string => $intake->date->toDateString());
+
+        /** @var array<int, string> $medicationDays */
+        $medicationDays = $intakesByDay->keys()->all();
+
+        /** @var array<string, array<int, array{name: string, dose: string, quantity: int}>> $medicationsByDay */
+        $medicationsByDay = $intakesByDay
+            ->map(fn ($intakes): array => $intakes
+                ->map(fn (MedicationIntake $intake): array => [
+                    'name' => $intake->medication->name,
+                    'dose' => (float) $intake->medication->dose_amount.' '.$intake->medication->dose_unit->value,
+                    'quantity' => $intake->quantity,
+                ])
+                ->values()
+                ->all())
             ->all();
 
         $medications = $request->user()
@@ -58,7 +81,9 @@ class CalendarController extends Controller
             'year' => $year,
             'today' => now()->toDateString(),
             'scores' => $scores,
+            'scoreIds' => $scoreIds,
             'medicationDays' => $medicationDays,
+            'medicationsByDay' => $medicationsByDay,
             'medications' => $medications,
         ]);
     }
@@ -98,5 +123,23 @@ class CalendarController extends Controller
         ]);
 
         return to_route('calendar', ['year' => $score->date->year]);
+    }
+
+    /**
+     * Update the score of a migraine that has already been logged.
+     *
+     * Only the score can change here; any medications recorded against the
+     * day are left untouched.
+     */
+    public function update(UpdateMigraineScoreRequest $request, MigraineScore $migraineScore): RedirectResponse
+    {
+        $migraineScore->update(['score' => $request->validated('score')]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => __('Score updated.'),
+        ]);
+
+        return to_route('calendar', ['year' => $migraineScore->date->year]);
     }
 }

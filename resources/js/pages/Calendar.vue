@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { calendar } from '@/routes';
-import { store } from '@/routes/migraine-scores';
+import { store, update } from '@/routes/migraine-scores';
 
 type Medication = {
     id: number;
@@ -25,11 +25,19 @@ type Medication = {
     dose: string;
 };
 
+type RecordedMedication = {
+    name: string;
+    dose: string;
+    quantity: number;
+};
+
 type Props = {
     year: number;
     today: string;
     scores: Record<string, number>;
+    scoreIds: Record<string, number>;
     medicationDays: string[];
+    medicationsByDay: Record<string, RecordedMedication[]>;
     medications: Medication[];
 };
 
@@ -41,8 +49,10 @@ type DayCell =
           kind: 'scored';
           key: string;
           date: string;
+          id: number;
           score: number;
           tookMedication: boolean;
+          medications: RecordedMedication[];
       };
 
 type MedicationTaken = {
@@ -109,8 +119,10 @@ const rows = computed<DayCell[][]>(() =>
                     kind: 'scored',
                     key,
                     date: key,
+                    id: props.scoreIds[key],
                     score,
                     tookMedication: medicationDaySet.value.has(key),
+                    medications: props.medicationsByDay[key] ?? [],
                 };
             }
 
@@ -124,7 +136,7 @@ const cellClass: Record<DayCell['kind'], string> = {
     future: 'bg-muted text-muted-foreground/50',
     unscored:
         'cursor-pointer bg-red-500 text-white hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-ring',
-    scored: 'bg-emerald-500 text-white',
+    scored: 'cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-ring',
 };
 
 const selectedDate = ref<string | null>(null);
@@ -200,6 +212,60 @@ const submit = (): void => {
     });
 };
 
+const editingCell = ref<Extract<DayCell, { kind: 'scored' }> | null>(null);
+const isEditOpen = computed({
+    get: () => editingCell.value !== null,
+    set: (open: boolean) => {
+        if (!open) {
+            closeEdit();
+        }
+    },
+});
+
+const editForm = useForm<{ score: number | null }>({ score: null });
+
+const openScored = (cell: DayCell): void => {
+    if (cell.kind !== 'scored') {
+        return;
+    }
+
+    editForm.reset();
+    editForm.clearErrors();
+    editForm.score = cell.score;
+    editingCell.value = cell;
+};
+
+const closeEdit = (): void => {
+    editingCell.value = null;
+    editForm.reset();
+    editForm.clearErrors();
+};
+
+const submitEdit = (): void => {
+    if (editingCell.value === null) {
+        return;
+    }
+
+    editForm.patch(update.url(editingCell.value.id), {
+        preserveScroll: true,
+        onSuccess: () => closeEdit(),
+    });
+};
+
+const formattedEditDate = computed(() =>
+    editingCell.value
+        ? new Date(`${editingCell.value.date}T00:00:00`).toLocaleDateString(
+              undefined,
+              {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+              },
+          )
+        : '',
+);
+
 const formattedSelectedDate = computed(() =>
     selectedDate.value
         ? new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString(
@@ -274,39 +340,36 @@ const formattedSelectedDate = computed(() =>
                                 :data-date="cell.date"
                                 @click="openDay(cell)"
                             />
+                            <button
+                                v-else-if="cell.kind === 'scored'"
+                                type="button"
+                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                :class="cellClass[cell.kind]"
+                                :aria-label="`Edit score for ${cell.date}`"
+                                :data-date="cell.date"
+                                :data-medication="
+                                    cell.tookMedication ? 'true' : undefined
+                                "
+                                :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}`"
+                                @click="openScored(cell)"
+                            >
+                                <span>{{ cell.score }}</span>
+                                <PillIcon
+                                    v-if="cell.tookMedication"
+                                    class="absolute top-0.5 right-0.5 size-1.5"
+                                    aria-label="Medication taken"
+                                />
+                            </button>
                             <div
                                 v-else
-                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                class="flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
                                 :class="cellClass[cell.kind]"
                                 :data-date="
                                     cell.kind === 'nonexistent'
                                         ? undefined
                                         : cell.date
                                 "
-                                :data-medication="
-                                    cell.kind === 'scored' &&
-                                    cell.tookMedication
-                                        ? 'true'
-                                        : undefined
-                                "
-                                :title="
-                                    cell.kind === 'scored'
-                                        ? `${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}`
-                                        : undefined
-                                "
-                            >
-                                <span>{{
-                                    cell.kind === 'scored' ? cell.score : ''
-                                }}</span>
-                                <PillIcon
-                                    v-if="
-                                        cell.kind === 'scored' &&
-                                        cell.tookMedication
-                                    "
-                                    class="absolute top-0.5 right-0.5 size-1.5"
-                                    aria-label="Medication taken"
-                                />
-                            </div>
+                            />
                         </td>
                     </tr>
                 </tbody>
@@ -437,6 +500,92 @@ const formattedSelectedDate = computed(() =>
                     <Button
                         type="submit"
                         :disabled="form.score === null || form.processing"
+                    >
+                        Save
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="isEditOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Edit score</DialogTitle>
+                <DialogDescription>
+                    {{ formattedEditDate }}. Choose a different migraine score
+                    from 0 (no migraine) to 10 (worst possible).
+                </DialogDescription>
+            </DialogHeader>
+
+            <form
+                v-if="editingCell"
+                class="space-y-4"
+                @submit.prevent="submitEdit"
+            >
+                <div
+                    class="grid grid-cols-6 gap-2 sm:grid-cols-11"
+                    role="radiogroup"
+                    aria-label="Score"
+                >
+                    <Button
+                        v-for="option in SCORE_OPTIONS"
+                        :key="option"
+                        type="button"
+                        role="radio"
+                        :aria-checked="editForm.score === option"
+                        :variant="
+                            editForm.score === option ? 'default' : 'outline'
+                        "
+                        size="icon"
+                        @click="editForm.score = option"
+                    >
+                        {{ option }}
+                    </Button>
+                </div>
+                <InputError :message="editForm.errors.score" />
+
+                <fieldset class="space-y-2">
+                    <legend class="text-sm font-medium">
+                        Medications recorded
+                    </legend>
+                    <p
+                        v-if="editingCell.medications.length === 0"
+                        class="text-muted-foreground text-sm"
+                    >
+                        No medications were recorded for this day.
+                    </p>
+                    <ul v-else class="space-y-2">
+                        <li
+                            v-for="(taken, index) in editingCell.medications"
+                            :key="index"
+                            class="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <span class="flex flex-col">
+                                <span>{{ taken.name }}</span>
+                                <span class="text-muted-foreground text-xs">
+                                    {{ taken.dose }}
+                                </span>
+                            </span>
+                            <span class="text-muted-foreground">
+                                &times;{{ taken.quantity }}
+                            </span>
+                        </li>
+                    </ul>
+                    <p class="text-muted-foreground text-xs">
+                        Medications can't be changed here.
+                    </p>
+                </fieldset>
+
+                <DialogFooter>
+                    <Button type="button" variant="outline" @click="closeEdit">
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        :disabled="
+                            editForm.score === null || editForm.processing
+                        "
                     >
                         Save
                     </Button>
