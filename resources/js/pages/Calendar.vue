@@ -26,6 +26,7 @@ type Medication = {
 };
 
 type RecordedMedication = {
+    id: number;
     name: string;
     dose: string;
     quantity: number;
@@ -159,34 +160,52 @@ const form = useForm<{
     medications: [],
 });
 
-const isSelected = (medication: Medication): boolean =>
-    form.medications.some((taken) => taken.id === medication.id);
+/**
+ * Build the checkbox / quantity helpers for a medications list, so the
+ * "Log your day" and "Edit day" dialogs can share the same picker.
+ */
+const medicationPicker = (
+    get: () => MedicationTaken[],
+    set: (medications: MedicationTaken[]) => void,
+) => ({
+    isSelected: (medication: Medication): boolean =>
+        get().some((taken) => taken.id === medication.id),
+    quantityFor: (medication: Medication): number =>
+        get().find((taken) => taken.id === medication.id)?.quantity ?? 1,
+    toggle: (medication: Medication, checked: boolean): void => {
+        set(
+            checked
+                ? [...get(), { id: medication.id, quantity: 1 }]
+                : get().filter((taken) => taken.id !== medication.id),
+        );
+    },
+    setQuantity: (medication: Medication, value: string | number): void => {
+        const quantity = Math.max(1, Math.floor(Number(value)) || 1);
 
-const quantityFor = (medication: Medication): number =>
-    form.medications.find((taken) => taken.id === medication.id)?.quantity ?? 1;
+        set(
+            get().map((taken) =>
+                taken.id === medication.id ? { ...taken, quantity } : taken,
+            ),
+        );
+    },
+});
 
-const toggleMedication = (medication: Medication, checked: boolean): void => {
-    form.medications = checked
-        ? [...form.medications, { id: medication.id, quantity: 1 }]
-        : form.medications.filter((taken) => taken.id !== medication.id);
-};
-
-const setQuantity = (medication: Medication, value: string | number): void => {
-    const quantity = Math.max(1, Math.floor(Number(value)) || 1);
-
-    form.medications = form.medications.map((taken) =>
-        taken.id === medication.id ? { ...taken, quantity } : taken,
-    );
-};
-
-const medicationError = computed(() => {
-    const errors = form.errors as Record<string, string | undefined>;
-
-    return Object.keys(errors)
+const firstMedicationError = (
+    errors: Record<string, string | undefined>,
+): string | undefined =>
+    Object.keys(errors)
         .filter((key) => key.startsWith('medications'))
         .map((key) => errors[key])
         .find((message) => message !== undefined);
-});
+
+const logMeds = medicationPicker(
+    () => form.medications,
+    (medications) => (form.medications = medications),
+);
+
+const medicationError = computed(() =>
+    firstMedicationError(form.errors as Record<string, string | undefined>),
+);
 
 const openDay = (cell: DayCell): void => {
     if (cell.kind !== 'unscored') {
@@ -222,7 +241,22 @@ const isEditOpen = computed({
     },
 });
 
-const editForm = useForm<{ score: number | null }>({ score: null });
+const editForm = useForm<{
+    score: number | null;
+    medications: MedicationTaken[];
+}>({
+    score: null,
+    medications: [],
+});
+
+const editMeds = medicationPicker(
+    () => editForm.medications,
+    (medications) => (editForm.medications = medications),
+);
+
+const editMedicationError = computed(() =>
+    firstMedicationError(editForm.errors as Record<string, string | undefined>),
+);
 
 const openScored = (cell: DayCell): void => {
     if (cell.kind !== 'scored') {
@@ -232,6 +266,10 @@ const openScored = (cell: DayCell): void => {
     editForm.reset();
     editForm.clearErrors();
     editForm.score = cell.score;
+    editForm.medications = cell.medications.map((taken) => ({
+        id: taken.id,
+        quantity: taken.quantity,
+    }));
     editingCell.value = cell;
 };
 
@@ -455,10 +493,10 @@ const formattedSelectedDate = computed(() =>
                         >
                             <Checkbox
                                 :id="`medication-${medication.id}`"
-                                :model-value="isSelected(medication)"
+                                :model-value="logMeds.isSelected(medication)"
                                 @update:model-value="
                                     (checked) =>
-                                        toggleMedication(
+                                        logMeds.toggle(
                                             medication,
                                             checked === true,
                                         )
@@ -476,16 +514,17 @@ const formattedSelectedDate = computed(() =>
                                 </span>
                             </Label>
                             <Input
-                                v-if="isSelected(medication)"
+                                v-if="logMeds.isSelected(medication)"
                                 type="number"
                                 inputmode="numeric"
                                 min="1"
                                 step="1"
                                 class="w-20"
                                 :aria-label="`Number of ${medication.name} taken`"
-                                :model-value="quantityFor(medication)"
+                                :model-value="logMeds.quantityFor(medication)"
                                 @update:model-value="
-                                    (value) => setQuantity(medication, value)
+                                    (value) =>
+                                        logMeds.setQuantity(medication, value)
                                 "
                             />
                         </li>
@@ -511,10 +550,11 @@ const formattedSelectedDate = computed(() =>
     <Dialog v-model:open="isEditOpen">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Edit score</DialogTitle>
+                <DialogTitle>Edit day</DialogTitle>
                 <DialogDescription>
-                    {{ formattedEditDate }}. Choose a different migraine score
-                    from 0 (no migraine) to 10 (worst possible).
+                    {{ formattedEditDate }}. Update the migraine score (0 = no
+                    migraine, 10 = worst possible) and the medications recorded
+                    for this day.
                 </DialogDescription>
             </DialogHeader>
 
@@ -547,34 +587,60 @@ const formattedSelectedDate = computed(() =>
 
                 <fieldset class="space-y-2">
                     <legend class="text-sm font-medium">
-                        Medications recorded
+                        Medications taken
                     </legend>
                     <p
-                        v-if="editingCell.medications.length === 0"
+                        v-if="medications.length === 0"
                         class="text-muted-foreground text-sm"
                     >
-                        No medications were recorded for this day.
+                        No ad hoc medications declared yet. Add them on the
+                        Medications page to record them here.
                     </p>
                     <ul v-else class="space-y-2">
                         <li
-                            v-for="(taken, index) in editingCell.medications"
-                            :key="index"
-                            class="flex items-center justify-between gap-3 text-sm"
+                            v-for="medication in medications"
+                            :key="medication.id"
+                            class="flex min-h-9 items-center gap-3"
                         >
-                            <span class="flex flex-col">
-                                <span>{{ taken.name }}</span>
-                                <span class="text-muted-foreground text-xs">
-                                    {{ taken.dose }}
+                            <Checkbox
+                                :id="`edit-medication-${medication.id}`"
+                                :model-value="editMeds.isSelected(medication)"
+                                @update:model-value="
+                                    (checked) =>
+                                        editMeds.toggle(
+                                            medication,
+                                            checked === true,
+                                        )
+                                "
+                            />
+                            <Label
+                                :for="`edit-medication-${medication.id}`"
+                                class="flex flex-1 flex-col items-start gap-0"
+                            >
+                                <span>{{ medication.name }}</span>
+                                <span
+                                    class="text-muted-foreground text-xs font-normal"
+                                >
+                                    {{ medication.dose }}
                                 </span>
-                            </span>
-                            <span class="text-muted-foreground">
-                                &times;{{ taken.quantity }}
-                            </span>
+                            </Label>
+                            <Input
+                                v-if="editMeds.isSelected(medication)"
+                                type="number"
+                                inputmode="numeric"
+                                min="1"
+                                step="1"
+                                class="w-20"
+                                :aria-label="`Number of ${medication.name} taken`"
+                                :model-value="editMeds.quantityFor(medication)"
+                                @update:model-value="
+                                    (value) =>
+                                        editMeds.setQuantity(medication, value)
+                                "
+                            />
                         </li>
                     </ul>
-                    <p class="text-muted-foreground text-xs">
-                        Medications can't be changed here.
-                    </p>
+                    <InputError :message="editMedicationError" />
                 </fieldset>
 
                 <DialogFooter>
