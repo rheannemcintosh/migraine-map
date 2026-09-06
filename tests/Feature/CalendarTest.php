@@ -218,11 +218,84 @@ test('the calendar exposes score ids and the medications recorded each day', fun
             ->where('scoreIds', ['2026-03-10' => $score->id])
             ->where('medicationsByDay', [
                 '2026-03-10' => [
-                    ['name' => 'Ibuprofen', 'dose' => '400 mg', 'quantity' => 2],
+                    ['id' => $ibuprofen->id, 'name' => 'Ibuprofen', 'dose' => '400 mg', 'quantity' => 2],
                 ],
             ])
         );
 });
+
+test('medications recorded against a day can be edited from the calendar', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $ibuprofen = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    $paracetamol = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-03-10', 'quantity' => 1]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), [
+            'score' => 4,
+            'medications' => [
+                ['id' => $ibuprofen->id, 'quantity' => 3],
+                ['id' => $paracetamol->id, 'quantity' => 2],
+            ],
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('calendar', ['year' => 2026]));
+
+    expect($user->medicationIntakes()->count())->toBe(2);
+    $this->assertDatabaseHas('medication_intakes', [
+        'user_id' => $user->id, 'medication_id' => $ibuprofen->id, 'quantity' => 3, 'date' => '2026-03-10',
+    ]);
+    $this->assertDatabaseHas('medication_intakes', [
+        'user_id' => $user->id, 'medication_id' => $paracetamol->id, 'quantity' => 2, 'date' => '2026-03-10',
+    ]);
+});
+
+test('all medications for a day can be removed from the calendar', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $ibuprofen = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-03-10', 'quantity' => 1]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), ['score' => 4, 'medications' => []])
+        ->assertSessionHasNoErrors();
+
+    expect($user->medicationIntakes()->count())->toBe(0);
+});
+
+test('editing a day only touches that day\'s medications', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $ibuprofen = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-03-09', 'quantity' => 5]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), ['score' => 4, 'medications' => []])
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('medication_intakes', [
+        'user_id' => $user->id, 'medication_id' => $ibuprofen->id, 'date' => '2026-03-09', 'quantity' => 5,
+    ]);
+});
+
+test('only the user\'s own active ad hoc medications can be edited in from the calendar', function (callable $medication) {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+
+    $this->actingAs($user)
+        ->patch(route('migraine-scores.update', $score), [
+            'score' => 4,
+            'medications' => [['id' => $medication($user)->id, 'quantity' => 1]],
+        ])
+        ->assertSessionHasErrors('medications.0.id');
+
+    expect($user->medicationIntakes()->count())->toBe(0);
+})->with([
+    'another user\'s medication' => [fn (User $user) => Medication::factory()->create(['frequency' => MedicationFrequency::AdHoc])],
+    'a scheduled medication' => [fn (User $user) => Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::OnceDaily])],
+    'an inactive medication' => [fn (User $user) => Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc, 'is_active' => false])],
+]);
 
 test('medications taken can be saved alongside the score', function () {
     Carbon::setTestNow('2026-06-15');

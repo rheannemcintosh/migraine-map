@@ -53,10 +53,11 @@ class CalendarController extends Controller
         /** @var array<int, string> $medicationDays */
         $medicationDays = $intakesByDay->keys()->all();
 
-        /** @var array<string, array<int, array{name: string, dose: string, quantity: int}>> $medicationsByDay */
+        /** @var array<string, array<int, array{id: int, name: string, dose: string, quantity: int}>> $medicationsByDay */
         $medicationsByDay = $intakesByDay
             ->map(fn ($intakes): array => $intakes
                 ->map(fn (MedicationIntake $intake): array => [
+                    'id' => (int) $intake->medication_id,
                     'name' => $intake->medication->name,
                     'dose' => (float) $intake->medication->dose_amount.' '.$intake->medication->dose_unit->value,
                     'quantity' => $intake->quantity,
@@ -126,18 +127,41 @@ class CalendarController extends Controller
     }
 
     /**
-     * Update the score of a migraine that has already been logged.
+     * Update a logged migraine from the calendar view.
      *
-     * Only the score can change here; any medications recorded against the
-     * day are left untouched.
+     * The score is always updated. When a medications list is supplied it
+     * replaces whatever was recorded for that day; omitting it leaves the
+     * existing medications untouched.
      */
     public function update(UpdateMigraineScoreRequest $request, MigraineScore $migraineScore): RedirectResponse
     {
-        $migraineScore->update(['score' => $request->validated('score')]);
+        $validated = $request->validated();
+        $user = $request->user();
+        $syncsMedications = array_key_exists('medications', $validated);
+
+        DB::transaction(function () use ($user, $migraineScore, $validated, $syncsMedications): void {
+            $migraineScore->update(['score' => $validated['score']]);
+
+            if (! $syncsMedications) {
+                return;
+            }
+
+            $date = $migraineScore->date->toDateString();
+
+            $user->medicationIntakes()->where('date', $date)->delete();
+
+            $user->medicationIntakes()->createMany(
+                array_map(fn (array $medication): array => [
+                    'medication_id' => $medication['id'],
+                    'date' => $date,
+                    'quantity' => $medication['quantity'],
+                ], $validated['medications']),
+            );
+        });
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => __('Score updated.'),
+            'message' => $syncsMedications ? __('Score and medications updated.') : __('Score updated.'),
         ]);
 
         return to_route('calendar', ['year' => $migraineScore->date->year]);
