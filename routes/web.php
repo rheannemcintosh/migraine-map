@@ -14,6 +14,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('calendar');
     Route::post('migraine-scores', [CalendarController::class, 'store'])
         ->name('migraine-scores.store');
+    Route::patch('migraine-scores/{migraineScore}', [CalendarController::class, 'update'])
+        ->name('migraine-scores.update');
 
     Route::get('medications', [MedicationController::class, 'index'])
         ->name('medications');
