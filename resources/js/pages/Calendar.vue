@@ -140,6 +140,11 @@ const cellClass: Record<DayCell['kind'], string> = {
     scored: 'cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-ring',
 };
 
+const todayClass = 'outline-foreground font-bold outline-2 outline-offset-2';
+
+const isToday = (cell: DayCell): boolean =>
+    cell.kind !== 'nonexistent' && cell.date === props.today;
+
 const selectedDate = ref<string | null>(null);
 const isOpen = computed({
     get: () => selectedDate.value !== null,
@@ -373,18 +378,32 @@ const formattedSelectedDate = computed(() =>
                                 v-if="cell.kind === 'unscored'"
                                 type="button"
                                 class="flex aspect-square w-full items-center justify-center rounded text-xs"
-                                :class="cellClass[cell.kind]"
+                                :class="[
+                                    cellClass[cell.kind],
+                                    isToday(cell) && todayClass,
+                                ]"
                                 :aria-label="`Log score for ${cell.date}`"
+                                :aria-current="
+                                    isToday(cell) ? 'date' : undefined
+                                "
                                 :data-date="cell.date"
+                                :data-today="isToday(cell) ? 'true' : undefined"
                                 @click="openDay(cell)"
                             />
                             <button
                                 v-else-if="cell.kind === 'scored'"
                                 type="button"
                                 class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="cellClass[cell.kind]"
+                                :class="[
+                                    cellClass[cell.kind],
+                                    isToday(cell) && todayClass,
+                                ]"
                                 :aria-label="`Edit score for ${cell.date}`"
+                                :aria-current="
+                                    isToday(cell) ? 'date' : undefined
+                                "
                                 :data-date="cell.date"
+                                :data-today="isToday(cell) ? 'true' : undefined"
                                 :data-medication="
                                     cell.tookMedication ? 'true' : undefined
                                 "
@@ -434,6 +453,12 @@ const formattedSelectedDate = computed(() =>
             </span>
             <span class="flex items-center gap-1.5">
                 <span class="bg-muted size-3 rounded" /> Future
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span
+                    class="bg-muted outline-foreground size-3 rounded outline-2 outline-offset-1"
+                />
+                Today
             </span>
             <span class="flex items-center gap-1.5">
                 <span class="bg-muted/40 size-3 rounded" /> Not a date
