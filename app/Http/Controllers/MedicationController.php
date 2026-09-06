@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\DoseUnit;
 use App\Enums\MedicationFrequency;
 use App\Http\Requests\StoreMedicationRequest;
+use App\Http\Requests\UpdateMedicationRequest;
 use App\Models\Medication;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class MedicationController extends Controller
                 'name' => $medication->name,
                 'dose_amount' => (float) $medication->dose_amount,
                 'dose_unit' => $medication->dose_unit->value,
-                'frequency' => $medication->frequency->label(),
+                'frequency' => $medication->frequency->value,
                 'is_prescription' => $medication->is_prescription,
                 'is_active' => $medication->is_active,
             ]);
@@ -47,6 +48,18 @@ class MedicationController extends Controller
         $request->user()->medications()->create($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Medication added.')]);
+
+        return to_route('medications');
+    }
+
+    /**
+     * Update one of the user's medications from the medication page.
+     */
+    public function update(UpdateMedicationRequest $request, Medication $medication): RedirectResponse
+    {
+        $medication->update($request->validated());
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Medication updated.')]);
 
         return to_route('medications');
     }

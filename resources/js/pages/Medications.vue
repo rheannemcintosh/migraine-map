@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { Pill, Plus } from '@lucide/vue';
-import { ref } from 'vue';
+import { Pencil, Pill, Plus } from '@lucide/vue';
+import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { medications as medicationsRoute } from '@/routes';
-import { store } from '@/routes/medications';
+import { store, update } from '@/routes/medications';
 
 type Medication = {
     id: number;
@@ -47,7 +47,10 @@ type Props = {
     frequencies: FrequencyOption[];
 };
 
-defineProps<Props>();
+const props = defineProps<Props>();
+
+const frequencyLabel = (value: string): string =>
+    props.frequencies.find((option) => option.value === value)?.label ?? value;
 
 defineOptions({
     layout: {
@@ -91,33 +94,89 @@ const close = (): void => {
     form.clearErrors();
 };
 
-const validate = (): boolean => {
-    form.clearErrors();
+const validate = (target: typeof form): boolean => {
+    target.clearErrors();
 
-    if (form.name.trim() === '') {
-        form.setError('name', 'The name field is required.');
+    if (target.name.trim() === '') {
+        target.setError('name', 'The name field is required.');
     }
 
-    if (form.dose_amount === '') {
-        form.setError('dose_amount', 'The dose amount field is required.');
-    } else if (form.dose_amount <= 0) {
-        form.setError(
+    if (target.dose_amount === '') {
+        target.setError('dose_amount', 'The dose amount field is required.');
+    } else if (target.dose_amount <= 0) {
+        target.setError(
             'dose_amount',
             'The dose amount field must be greater than 0.',
         );
     }
 
-    return !form.hasErrors;
+    return !target.hasErrors;
 };
 
 const submit = (): void => {
-    if (!validate()) {
+    if (!validate(form)) {
         return;
     }
 
     form.post(store.url(), {
         preserveScroll: true,
         onSuccess: () => close(),
+    });
+};
+
+const editingId = ref<number | null>(null);
+
+const editForm = useForm<{
+    name: string;
+    dose_amount: number | '';
+    dose_unit: string;
+    frequency: string;
+    is_prescription: boolean;
+    is_active: boolean;
+}>({
+    name: '',
+    dose_amount: '',
+    dose_unit: 'mg',
+    frequency: 'ad_hoc',
+    is_prescription: false,
+    is_active: true,
+});
+
+const isEditOpen = computed({
+    get: () => editingId.value !== null,
+    set: (value: boolean) => {
+        if (!value) {
+            closeEdit();
+        }
+    },
+});
+
+const openEdit = (medication: Medication): void => {
+    editForm.reset();
+    editForm.clearErrors();
+    editForm.name = medication.name;
+    editForm.dose_amount = medication.dose_amount;
+    editForm.dose_unit = medication.dose_unit;
+    editForm.frequency = medication.frequency;
+    editForm.is_prescription = medication.is_prescription;
+    editForm.is_active = medication.is_active;
+    editingId.value = medication.id;
+};
+
+const closeEdit = (): void => {
+    editingId.value = null;
+    editForm.reset();
+    editForm.clearErrors();
+};
+
+const submitEdit = (): void => {
+    if (editingId.value === null || !validate(editForm)) {
+        return;
+    }
+
+    editForm.patch(update.url(editingId.value), {
+        preserveScroll: true,
+        onSuccess: () => closeEdit(),
     });
 };
 
@@ -164,13 +223,24 @@ const formatDose = (medication: Medication): string =>
             >
                 <div class="flex items-start justify-between gap-2">
                     <h2 class="font-semibold">{{ medication.name }}</h2>
-                    <Badge
-                        :variant="
-                            medication.is_active ? 'default' : 'secondary'
-                        "
-                    >
-                        {{ medication.is_active ? 'Active' : 'Inactive' }}
-                    </Badge>
+                    <div class="flex items-center gap-2">
+                        <Badge
+                            :variant="
+                                medication.is_active ? 'default' : 'secondary'
+                            "
+                        >
+                            {{ medication.is_active ? 'Active' : 'Inactive' }}
+                        </Badge>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="size-7 cursor-pointer"
+                            :aria-label="`Edit ${medication.name}`"
+                            @click="openEdit(medication)"
+                        >
+                            <Pencil class="size-4" />
+                        </Button>
+                    </div>
                 </div>
                 <dl class="text-muted-foreground grid gap-1 text-sm">
                     <div class="flex justify-between gap-2">
@@ -182,7 +252,7 @@ const formatDose = (medication: Medication): string =>
                     <div class="flex justify-between gap-2">
                         <dt>Frequency</dt>
                         <dd class="text-foreground">
-                            {{ medication.frequency }}
+                            {{ frequencyLabel(medication.frequency) }}
                         </dd>
                     </div>
                     <div class="flex justify-between gap-2">
@@ -314,6 +384,132 @@ const formatDose = (medication: Medication): string =>
                         :disabled="form.processing"
                     >
                         Save medication
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="isEditOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Edit medication</DialogTitle>
+                <DialogDescription>
+                    Update the details of this medication. Changes are saved to
+                    your medication list.
+                </DialogDescription>
+            </DialogHeader>
+
+            <form class="space-y-4" @submit.prevent="submitEdit">
+                <div class="grid gap-2">
+                    <Label for="edit-name">Name</Label>
+                    <Input
+                        id="edit-name"
+                        v-model="editForm.name"
+                        type="text"
+                        autofocus
+                        placeholder="e.g. Sumatriptan"
+                    />
+                    <InputError :message="editForm.errors.name" />
+                </div>
+
+                <div class="grid grid-cols-2 items-start gap-4">
+                    <div class="grid content-start gap-2">
+                        <Label for="edit-dose_amount">Dose</Label>
+                        <Input
+                            id="edit-dose_amount"
+                            v-model="editForm.dose_amount"
+                            type="number"
+                            inputmode="decimal"
+                            step="any"
+                            placeholder="e.g. 50"
+                        />
+                        <InputError :message="editForm.errors.dose_amount" />
+                    </div>
+
+                    <div class="grid content-start gap-2">
+                        <Label for="edit-dose_unit">Unit</Label>
+                        <Select v-model="editForm.dose_unit">
+                            <SelectTrigger id="edit-dose_unit" class="w-full">
+                                <SelectValue placeholder="Select a unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="unit in doseUnits"
+                                    :key="unit"
+                                    :value="unit"
+                                >
+                                    {{ unit }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError :message="editForm.errors.dose_unit" />
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="edit-frequency">Frequency</Label>
+                    <Select v-model="editForm.frequency">
+                        <SelectTrigger id="edit-frequency" class="w-full">
+                            <SelectValue placeholder="Select a frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                v-for="option in frequencies"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError :message="editForm.errors.frequency" />
+                </div>
+
+                <div class="grid gap-3">
+                    <Label
+                        for="edit-is_prescription"
+                        class="flex items-center space-x-3"
+                    >
+                        <Checkbox
+                            id="edit-is_prescription"
+                            v-model="editForm.is_prescription"
+                        />
+                        <span>This is a prescription medication</span>
+                    </Label>
+                    <InputError :message="editForm.errors.is_prescription" />
+
+                    <Label
+                        for="edit-is_active"
+                        class="flex items-center space-x-3"
+                    >
+                        <Checkbox
+                            id="edit-is_active"
+                            v-model="editForm.is_active"
+                        />
+                        <span
+                            >Currently active (I can still access and take
+                            it)</span
+                        >
+                    </Label>
+                    <InputError :message="editForm.errors.is_active" />
+                </div>
+
+                <DialogFooter>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="cursor-pointer"
+                        @click="closeEdit"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        class="cursor-pointer"
+                        :disabled="editForm.processing"
+                    >
+                        Save changes
                     </Button>
                 </DialogFooter>
             </form>

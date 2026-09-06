@@ -21,6 +21,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('medications');
     Route::post('medications', [MedicationController::class, 'store'])
         ->name('medications.store');
+    Route::patch('medications/{medication}', [MedicationController::class, 'update'])
+        ->name('medications.update');
 });
 
 require __DIR__.'/settings.php';
