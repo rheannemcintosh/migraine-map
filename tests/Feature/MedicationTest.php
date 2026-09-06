@@ -31,7 +31,8 @@ test('the medications page lists only the user\'s medications with the form opti
                 ->where('name', 'Sumatriptan')
                 ->where('dose_amount', 50)
                 ->where('dose_unit', 'mg')
-                ->where('frequency', 'Ad hoc (as needed)')
+                ->where('frequency', 'ad_hoc')
+                ->where('frequency_label', 'Ad hoc (as needed)')
                 ->where('is_prescription', true)
                 ->where('is_active', true)
                 ->etc()
@@ -145,4 +146,76 @@ test('prescription and active flags must be booleans', function () {
             'is_active' => 'yes',
         ])
         ->assertSessionHasErrors(['is_prescription', 'is_active']);
+});
+
+test('a medication can be edited from the medication page', function () {
+    $user = User::factory()->create();
+    $medication = Medication::factory()->for($user)->create([
+        'name' => 'Sumatriptan',
+        'dose_amount' => 50,
+        'dose_unit' => DoseUnit::Milligram,
+        'frequency' => MedicationFrequency::AdHoc,
+        'is_prescription' => true,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('medications.update', $medication), [
+            'name' => 'Sumatriptan',
+            'dose_amount' => 100,
+            'dose_unit' => 'mg',
+            'frequency' => 'twice_daily',
+            'is_prescription' => true,
+            'is_active' => false,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('medications'));
+
+    $medication->refresh();
+
+    expect((float) $medication->dose_amount)->toBe(100.0)
+        ->and($medication->frequency)->toBe(MedicationFrequency::TwiceDaily)
+        ->and($medication->is_active)->toBeFalse();
+});
+
+test('a medication edit is validated', function () {
+    $user = User::factory()->create();
+    $medication = Medication::factory()->for($user)->create(['name' => 'Sumatriptan']);
+
+    $this->actingAs($user)
+        ->patch(route('medications.update', $medication), [
+            'name' => '',
+            'dose_amount' => 0,
+            'dose_unit' => 'handful',
+            'frequency' => 'whenever',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['name', 'dose_amount', 'dose_unit', 'frequency']);
+
+    expect($medication->fresh()->name)->toBe('Sumatriptan');
+});
+
+test('a user cannot edit another user\'s medication', function () {
+    $medication = Medication::factory()->create(['name' => 'Theirs']);
+
+    $this->actingAs(User::factory()->create())
+        ->patch(route('medications.update', $medication), [
+            'name' => 'Mine now',
+            'dose_amount' => 1,
+            'dose_unit' => 'tablet',
+            'frequency' => 'ad_hoc',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertForbidden();
+
+    expect($medication->fresh()->name)->toBe('Theirs');
+});
+
+test('guests cannot edit a medication', function () {
+    $medication = Medication::factory()->create();
+
+    $this->patch(route('medications.update', $medication), [])
+        ->assertRedirect(route('login'));
 });
