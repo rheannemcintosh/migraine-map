@@ -49,6 +49,7 @@ class MedicationScheduleConfirmation extends Model
     protected function casts(): array
     {
         return [
+            'medication_schedule_id' => 'integer',
             'date' => 'date:Y-m-d',
         ];
     }

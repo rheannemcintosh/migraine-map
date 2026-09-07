@@ -146,12 +146,12 @@ class CalendarController extends Controller
             $doses = $schedules
                 ->filter(fn (MedicationSchedule $schedule): bool => $schedule->isDueOn($day))
                 ->map(fn (MedicationSchedule $schedule): array => [
-                    'scheduleId' => $schedule->id,
-                    'medicationId' => $schedule->medication_id,
+                    'scheduleId' => (int) $schedule->id,
+                    'medicationId' => (int) $schedule->medication_id,
                     'name' => $schedule->medication->name,
                     'dose' => (float) $schedule->medication->dose_amount.' '.$schedule->medication->dose_unit->value,
                     'label' => $schedule->label(),
-                    'confirmationId' => $confirmations->get($schedule->id.'|'.$date)?->id,
+                    'confirmationId' => ($confirmation = $confirmations->get($schedule->id.'|'.$date)) === null ? null : (int) $confirmation->id,
                 ])
                 ->values()
                 ->all();

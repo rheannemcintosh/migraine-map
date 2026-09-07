@@ -262,7 +262,7 @@ test('editing a medication keeps the confirmations of unchanged doses', function
 
     expect($schedules)->toHaveCount(2)
         ->and($schedules[0]->formattedTime())->toBe('14:00')
-        ->and($schedules[1]->id)->toBe($waking->id)
+        ->and((int) $schedules[1]->id)->toBe($waking->id)
         ->and($schedules[1]->position)->toBe(1);
 
     $this->assertModelExists($kept);
