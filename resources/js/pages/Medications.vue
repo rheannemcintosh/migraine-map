@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { Pencil, Pill, Plus } from '@lucide/vue';
+import { Clock, Pencil, Pill, Plus, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,13 @@ import {
 import { medications as medicationsRoute } from '@/routes';
 import { store, update } from '@/routes/medications';
 
+type Schedule = {
+    id: number;
+    time_of_day: string | null;
+    time: string | null;
+    label: string;
+};
+
 type Medication = {
     id: number;
     name: string;
@@ -34,9 +41,10 @@ type Medication = {
     frequency: string;
     is_prescription: boolean;
     is_active: boolean;
+    schedules: Schedule[];
 };
 
-type FrequencyOption = {
+type Option = {
     value: string;
     label: string;
 };
@@ -44,13 +52,59 @@ type FrequencyOption = {
 type Props = {
     medications: Medication[];
     doseUnits: string[];
-    frequencies: FrequencyOption[];
+    frequencies: Option[];
+    timesOfDay: Option[];
 };
 
 const props = defineProps<Props>();
 
 const frequencyLabel = (value: string): string =>
     props.frequencies.find((option) => option.value === value)?.label ?? value;
+
+// A dose is due either during a named period or at a specific clock time.
+type ScheduleInput = {
+    time_of_day: string | null;
+    time: string | null;
+};
+
+// Sentinel value in the dose `Select` for "a specific clock time".
+const SPECIFIC_TIME = 'time';
+
+const newDose = (): ScheduleInput => ({ time_of_day: 'morning', time: null });
+
+const doseKind = (dose: ScheduleInput): string =>
+    dose.time_of_day ?? SPECIFIC_TIME;
+
+const setDoseKind = (dose: ScheduleInput, kind: string): void => {
+    if (kind === SPECIFIC_TIME) {
+        dose.time_of_day = null;
+        dose.time = dose.time ?? '08:00';
+    } else {
+        dose.time_of_day = kind;
+        dose.time = null;
+    }
+};
+
+type MedicationForm = {
+    name: string;
+    // `<Input type="number">` makes v-model store a number, or '' when the field is empty.
+    dose_amount: number | '';
+    dose_unit: string;
+    frequency: string;
+    is_prescription: boolean;
+    is_active: boolean;
+    schedules: ScheduleInput[];
+};
+
+const emptyForm = (): MedicationForm => ({
+    name: '',
+    dose_amount: '',
+    dose_unit: 'mg',
+    frequency: 'ad_hoc',
+    is_prescription: false,
+    is_active: true,
+    schedules: [],
+});
 
 defineOptions({
     layout: {
@@ -65,22 +119,7 @@ defineOptions({
 
 const isOpen = ref(false);
 
-const form = useForm<{
-    name: string;
-    // `<Input type="number">` makes v-model store a number, or '' when the field is empty.
-    dose_amount: number | '';
-    dose_unit: string;
-    frequency: string;
-    is_prescription: boolean;
-    is_active: boolean;
-}>({
-    name: '',
-    dose_amount: '',
-    dose_unit: 'mg',
-    frequency: 'ad_hoc',
-    is_prescription: false,
-    is_active: true,
-});
+const form = useForm<MedicationForm>(emptyForm());
 
 const open = (): void => {
     form.reset();
@@ -110,7 +149,29 @@ const validate = (target: typeof form): boolean => {
         );
     }
 
+    target.schedules.forEach((dose, index) => {
+        if (dose.time_of_day === null && (dose.time ?? '') === '') {
+            target.setError(
+                `schedules.${index}.time` as keyof MedicationForm,
+                'Enter a time for this dose.',
+            );
+        }
+    });
+
     return !target.hasErrors;
+};
+
+const scheduleError = (
+    target: typeof form,
+    index: number,
+): string | undefined => {
+    const errors = target.errors as Record<string, string | undefined>;
+
+    return (
+        errors[`schedules.${index}.time`] ??
+        errors[`schedules.${index}.time_of_day`] ??
+        errors[`schedules.${index}`]
+    );
 };
 
 const submit = (): void => {
@@ -126,21 +187,7 @@ const submit = (): void => {
 
 const editingId = ref<number | null>(null);
 
-const editForm = useForm<{
-    name: string;
-    dose_amount: number | '';
-    dose_unit: string;
-    frequency: string;
-    is_prescription: boolean;
-    is_active: boolean;
-}>({
-    name: '',
-    dose_amount: '',
-    dose_unit: 'mg',
-    frequency: 'ad_hoc',
-    is_prescription: false,
-    is_active: true,
-});
+const editForm = useForm<MedicationForm>(emptyForm());
 
 const isEditOpen = computed({
     get: () => editingId.value !== null,
@@ -160,6 +207,10 @@ const openEdit = (medication: Medication): void => {
     editForm.frequency = medication.frequency;
     editForm.is_prescription = medication.is_prescription;
     editForm.is_active = medication.is_active;
+    editForm.schedules = medication.schedules.map((schedule) => ({
+        time_of_day: schedule.time_of_day,
+        time: schedule.time,
+    }));
     editingId.value = medication.id;
 };
 
@@ -265,6 +316,28 @@ const formatDose = (medication: Medication): string =>
                             }}
                         </dd>
                     </div>
+                    <div class="flex justify-between gap-2">
+                        <dt>Schedule</dt>
+                        <dd class="text-foreground text-right">
+                            <span v-if="medication.schedules.length === 0">
+                                Not scheduled
+                            </span>
+                            <ul v-else class="flex flex-wrap justify-end gap-1">
+                                <li
+                                    v-for="schedule in medication.schedules"
+                                    :key="schedule.id"
+                                >
+                                    <Badge variant="outline" class="gap-1">
+                                        <Clock
+                                            v-if="schedule.time !== null"
+                                            class="size-3"
+                                        />
+                                        {{ schedule.label }}
+                                    </Badge>
+                                </li>
+                            </ul>
+                        </dd>
+                    </div>
                 </dl>
             </li>
         </ul>
@@ -344,6 +417,83 @@ const formatDose = (medication: Medication): string =>
                         </SelectContent>
                     </Select>
                     <InputError :message="form.errors.frequency" />
+                </div>
+
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label>Schedule</Label>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="cursor-pointer"
+                            @click="form.schedules.push(newDose())"
+                        >
+                            <Plus />
+                            Add dose
+                        </Button>
+                    </div>
+                    <p
+                        v-if="form.schedules.length === 0"
+                        class="text-muted-foreground text-sm"
+                    >
+                        No scheduled doses. Add one for each time of day this
+                        medication is taken.
+                    </p>
+                    <div
+                        v-for="(dose, index) in form.schedules"
+                        :key="index"
+                        class="grid gap-1"
+                    >
+                        <div class="flex items-center gap-2">
+                            <Select
+                                :model-value="doseKind(dose)"
+                                @update:model-value="
+                                    setDoseKind(dose, String($event))
+                                "
+                            >
+                                <SelectTrigger
+                                    :id="`dose-${index}`"
+                                    class="flex-1"
+                                    :aria-label="`Dose ${index + 1} time of day`"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="option in timesOfDay"
+                                        :key="option.value"
+                                        :value="option.value"
+                                    >
+                                        {{ option.label }}
+                                    </SelectItem>
+                                    <SelectItem :value="SPECIFIC_TIME">
+                                        Specific time
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Input
+                                v-if="dose.time_of_day === null"
+                                :model-value="dose.time ?? ''"
+                                type="time"
+                                @update:model-value="dose.time = String($event)"
+                                class="w-32"
+                                :aria-label="`Dose ${index + 1} time`"
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                class="size-8 shrink-0 cursor-pointer"
+                                :aria-label="`Remove dose ${index + 1}`"
+                                @click="form.schedules.splice(index, 1)"
+                            >
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                        <InputError :message="scheduleError(form, index)" />
+                    </div>
+                    <InputError :message="form.errors.schedules" />
                 </div>
 
                 <div class="grid gap-3">
@@ -464,6 +614,83 @@ const formatDose = (medication: Medication): string =>
                         </SelectContent>
                     </Select>
                     <InputError :message="editForm.errors.frequency" />
+                </div>
+
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label>Schedule</Label>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="cursor-pointer"
+                            @click="editForm.schedules.push(newDose())"
+                        >
+                            <Plus />
+                            Add dose
+                        </Button>
+                    </div>
+                    <p
+                        v-if="editForm.schedules.length === 0"
+                        class="text-muted-foreground text-sm"
+                    >
+                        No scheduled doses. Add one for each time of day this
+                        medication is taken.
+                    </p>
+                    <div
+                        v-for="(dose, index) in editForm.schedules"
+                        :key="index"
+                        class="grid gap-1"
+                    >
+                        <div class="flex items-center gap-2">
+                            <Select
+                                :model-value="doseKind(dose)"
+                                @update:model-value="
+                                    setDoseKind(dose, String($event))
+                                "
+                            >
+                                <SelectTrigger
+                                    :id="`edit-dose-${index}`"
+                                    class="flex-1"
+                                    :aria-label="`Dose ${index + 1} time of day`"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="option in timesOfDay"
+                                        :key="option.value"
+                                        :value="option.value"
+                                    >
+                                        {{ option.label }}
+                                    </SelectItem>
+                                    <SelectItem :value="SPECIFIC_TIME">
+                                        Specific time
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Input
+                                v-if="dose.time_of_day === null"
+                                :model-value="dose.time ?? ''"
+                                type="time"
+                                @update:model-value="dose.time = String($event)"
+                                class="w-32"
+                                :aria-label="`Dose ${index + 1} time`"
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                class="size-8 shrink-0 cursor-pointer"
+                                :aria-label="`Remove dose ${index + 1}`"
+                                @click="editForm.schedules.splice(index, 1)"
+                            >
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                        <InputError :message="scheduleError(editForm, index)" />
+                    </div>
+                    <InputError :message="editForm.errors.schedules" />
                 </div>
 
                 <div class="grid gap-3">
