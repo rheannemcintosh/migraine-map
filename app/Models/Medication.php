@@ -31,6 +31,14 @@ class Medication extends Model
     use HasFactory;
 
     /**
+     * The dose as displayed to the user, e.g. "400 mg".
+     */
+    public function doseLabel(): string
+    {
+        return (float) $this->dose_amount.' '.$this->dose_unit->value;
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
