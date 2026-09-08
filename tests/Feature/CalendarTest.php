@@ -32,6 +32,22 @@ test('the calendar defaults to the current year and includes only that year\'s s
         );
 });
 
+test('the calendar always reports the current date as today', function () {
+    $user = User::factory()->create();
+
+    Carbon::setTestNow('2026-06-15');
+
+    $this->actingAs($user)
+        ->get(route('calendar'))
+        ->assertInertia(fn (Assert $page) => $page->where('today', '2026-06-15'));
+
+    Carbon::setTestNow('2026-06-16');
+
+    $this->actingAs($user)
+        ->get(route('calendar', ['year' => 2025]))
+        ->assertInertia(fn (Assert $page) => $page->where('today', '2026-06-16'));
+});
+
 test('the calendar can be viewed for another year', function () {
     $user = User::factory()->create();
     MigraineScore::factory()->for($user)->create(['date' => '2025-12-31', 'score' => 7]);

@@ -62,7 +62,7 @@ class CalendarController extends Controller
                 ->map(fn (MedicationIntake $intake): array => [
                     'id' => (int) $intake->medication_id,
                     'name' => $intake->medication->name,
-                    'dose' => (float) $intake->medication->dose_amount.' '.$intake->medication->dose_unit->value,
+                    'dose' => $intake->medication->doseLabel(),
                     'quantity' => $intake->quantity,
                 ])
                 ->values()
@@ -78,7 +78,7 @@ class CalendarController extends Controller
             ->map(fn (Medication $medication): array => [
                 'id' => $medication->id,
                 'name' => $medication->name,
-                'dose' => (float) $medication->dose_amount.' '.$medication->dose_unit->value,
+                'dose' => $medication->doseLabel(),
             ]);
 
         $scheduledDosesByDay = $this->scheduledDosesByDay($request, $year);
@@ -198,7 +198,7 @@ class CalendarController extends Controller
             'message' => $medications === [] ? __('Score saved.') : __('Score and medications saved.'),
         ]);
 
-        return to_route('calendar', ['year' => $score->date->year]);
+        return back(fallback: route('calendar', ['year' => $score->date->year]));
     }
 
     /**
@@ -239,6 +239,6 @@ class CalendarController extends Controller
             'message' => $syncsMedications ? __('Score and medications updated.') : __('Score updated.'),
         ]);
 
-        return to_route('calendar', ['year' => $migraineScore->date->year]);
+        return back(fallback: route('calendar', ['year' => $migraineScore->date->year]));
     }
 }
