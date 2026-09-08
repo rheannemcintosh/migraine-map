@@ -333,7 +333,10 @@ const formattedSelectedDate = computed(() =>
                                 v-if="cell.kind === 'unscored'"
                                 type="button"
                                 class="flex aspect-square w-full items-center justify-center rounded text-xs"
-                                :class="[classFor(cell), isToday(cell) && todayClass]"
+                                :class="[
+                                    classFor(cell),
+                                    isToday(cell) && todayClass,
+                                ]"
                                 :aria-label="`Log score for ${cell.date}`"
                                 :aria-current="
                                     isToday(cell) ? 'date' : undefined
@@ -354,7 +357,10 @@ const formattedSelectedDate = computed(() =>
                                 v-else-if="cell.kind === 'scored'"
                                 type="button"
                                 class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="[classFor(cell), isToday(cell) && todayClass]"
+                                :class="[
+                                    classFor(cell),
+                                    isToday(cell) && todayClass,
+                                ]"
                                 :aria-label="`Edit score for ${cell.date}`"
                                 :aria-current="
                                     isToday(cell) ? 'date' : undefined
@@ -468,7 +474,9 @@ const formattedSelectedDate = computed(() =>
                 v-if="selectedDate && scheduledDosesFor(selectedDate).length"
                 class="space-y-2"
             >
-                <legend class="text-sm font-medium">Scheduled medications</legend>
+                <legend class="text-sm font-medium">
+                    Scheduled medications
+                </legend>
                 <p class="text-muted-foreground text-xs">
                     Tick each dose as you take it. These are saved immediately.
                 </p>
@@ -550,7 +558,9 @@ const formattedSelectedDate = computed(() =>
                 v-if="editingCell && scheduledDosesFor(editingCell.date).length"
                 class="space-y-2"
             >
-                <legend class="text-sm font-medium">Scheduled medications</legend>
+                <legend class="text-sm font-medium">
+                    Scheduled medications
+                </legend>
                 <p class="text-muted-foreground text-xs">
                     Tick each dose as you take it. These are saved immediately.
                 </p>
