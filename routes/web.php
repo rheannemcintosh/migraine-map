@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MedicationConfirmationController;
 use App\Http\Controllers\MedicationController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('migraine-scores.store');
     Route::patch('migraine-scores/{migraineScore}', [CalendarController::class, 'update'])
         ->name('migraine-scores.update');
+    Route::post('medication-confirmations', [MedicationConfirmationController::class, 'store'])
+        ->name('medication-confirmations.store');
+    Route::delete('medication-confirmations/{medicationConfirmation}', [MedicationConfirmationController::class, 'destroy'])
+        ->name('medication-confirmations.destroy');
 
     Route::get('medications', [MedicationController::class, 'index'])
         ->name('medications');

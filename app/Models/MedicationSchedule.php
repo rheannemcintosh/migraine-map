@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Enums\TimeOfDay;
 use Database\Factories\MedicationScheduleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -22,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Medication $medication
+ * @property-read Collection<int, MedicationScheduleConfirmation> $confirmations
  */
 #[Fillable(['time_of_day', 'time', 'position'])]
 class MedicationSchedule extends Model
@@ -35,6 +38,25 @@ class MedicationSchedule extends Model
     public function medication(): BelongsTo
     {
         return $this->belongsTo(Medication::class);
+    }
+
+    /**
+     * @return HasMany<MedicationScheduleConfirmation, $this>
+     */
+    public function confirmations(): HasMany
+    {
+        return $this->hasMany(MedicationScheduleConfirmation::class);
+    }
+
+    /**
+     * Whether this dose is due on the given day: from the day it was scheduled
+     * up to today, while the medication is active.
+     */
+    public function isDueOn(Carbon $date): bool
+    {
+        return $this->medication->is_active
+            && $this->created_at !== null
+            && $date->between($this->created_at->copy()->startOfDay(), today()->endOfDay());
     }
 
     /**

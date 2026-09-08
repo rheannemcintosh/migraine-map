@@ -62,17 +62,42 @@ class Medication extends Model
     /**
      * Replace the schedule with the given doses.
      *
+     * Doses that already exist (same time of day or clock time) are kept so
+     * their confirmations survive; the rest are removed and new ones created.
+     *
      * @param  array<int, array{time_of_day?: string|null, time?: string|null}>  $doses
      */
     public function syncSchedules(array $doses): void
     {
-        $this->schedules()->delete();
+        $existing = $this->schedules()->get();
+        $kept = [];
 
-        $this->schedules()->createMany(collect($doses)->values()->map(fn (array $dose, int $position): array => [
-            'time_of_day' => $dose['time_of_day'] ?? null,
-            'time' => $dose['time'] ?? null,
-            'position' => $position,
-        ])->all());
+        foreach (array_values($doses) as $position => $dose) {
+            $timeOfDay = $dose['time_of_day'] ?? null;
+            $time = $dose['time'] ?? null;
+
+            $match = $existing->first(fn (MedicationSchedule $schedule): bool => ! in_array($schedule->id, $kept, true)
+                && $schedule->time_of_day?->value === $timeOfDay
+                && $schedule->formattedTime() === ($time === null ? null : substr($time, 0, 5)));
+
+            if ($match !== null) {
+                $match->update(['position' => $position]);
+                $kept[] = $match->id;
+
+                continue;
+            }
+
+            $created = $this->schedules()->create([
+                'time_of_day' => $timeOfDay,
+                'time' => $time,
+                'position' => $position,
+            ]);
+            $kept[] = $created->id;
+        }
+
+        $this->schedules()->whereNotIn('id', $kept)->delete();
+
+        $this->unsetRelation('schedules');
     }
 
     /**

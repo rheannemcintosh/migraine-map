@@ -7,9 +7,12 @@ use App\Http\Requests\StoreMigraineScoreRequest;
 use App\Http\Requests\UpdateMigraineScoreRequest;
 use App\Models\Medication;
 use App\Models\MedicationIntake;
+use App\Models\MedicationSchedule;
+use App\Models\MedicationScheduleConfirmation;
 use App\Models\MigraineScore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -78,6 +81,14 @@ class CalendarController extends Controller
                 'dose' => $medication->doseLabel(),
             ]);
 
+        $scheduledDosesByDay = $this->scheduledDosesByDay($request, $year);
+
+        /** @var array<int, string> $missedMedicationDays */
+        $missedMedicationDays = collect($scheduledDosesByDay)
+            ->filter(fn (array $doses): bool => collect($doses)->contains(fn (array $dose): bool => $dose['confirmationId'] === null))
+            ->keys()
+            ->all();
+
         return Inertia::render('Calendar', [
             'year' => $year,
             'today' => now()->toDateString(),
@@ -86,7 +97,71 @@ class CalendarController extends Controller
             'medicationDays' => $medicationDays,
             'medicationsByDay' => $medicationsByDay,
             'medications' => $medications,
+            'scheduledDosesByDay' => $scheduledDosesByDay,
+            'missedMedicationDays' => $missedMedicationDays,
         ]);
+    }
+
+    /**
+     * Every scheduled dose due on each day of the year so far, with the id of
+     * its confirmation when the user has ticked it off.
+     *
+     * @return array<string, array<int, array{scheduleId: int, medicationId: int, name: string, dose: string, label: string, confirmationId: int|null}>>
+     */
+    private function scheduledDosesByDay(Request $request, int $year): array
+    {
+        $user = $request->user();
+
+        $schedules = MedicationSchedule::query()
+            ->whereHas('medication', fn ($query) => $query->where('user_id', $user->id)->where('is_active', true))
+            ->with('medication')
+            ->get()
+            ->sortBy([
+                fn (MedicationSchedule $a, MedicationSchedule $b): int => strcmp($a->medication->name, $b->medication->name),
+                fn (MedicationSchedule $a, MedicationSchedule $b): int => $a->position <=> $b->position,
+            ])
+            ->values();
+
+        if ($schedules->isEmpty()) {
+            return [];
+        }
+
+        $confirmations = $user->medicationScheduleConfirmations()
+            ->whereYear('date', $year)
+            ->get()
+            ->keyBy(fn (MedicationScheduleConfirmation $confirmation): string => $confirmation->medication_schedule_id.'|'.$confirmation->date->toDateString());
+
+        $start = Carbon::create($year)->startOfYear();
+        $end = min($start->copy()->endOfYear(), today());
+
+        if ($end->lessThan($start)) {
+            return [];
+        }
+
+        $dosesByDay = [];
+
+        foreach ($start->daysUntil($end) as $day) {
+            $date = $day->toDateString();
+
+            $doses = $schedules
+                ->filter(fn (MedicationSchedule $schedule): bool => $schedule->isDueOn($day))
+                ->map(fn (MedicationSchedule $schedule): array => [
+                    'scheduleId' => (int) $schedule->id,
+                    'medicationId' => (int) $schedule->medication_id,
+                    'name' => $schedule->medication->name,
+                    'dose' => (float) $schedule->medication->dose_amount.' '.$schedule->medication->dose_unit->value,
+                    'label' => $schedule->label(),
+                    'confirmationId' => ($confirmation = $confirmations->get($schedule->id.'|'.$date)) === null ? null : (int) $confirmation->id,
+                ])
+                ->values()
+                ->all();
+
+            if ($doses !== []) {
+                $dosesByDay[$date] = $doses;
+            }
+        }
+
+        return $dosesByDay;
     }
 
     /**
