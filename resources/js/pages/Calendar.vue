@@ -148,48 +148,63 @@ const rows = computed<DayCell[][]>(() =>
     }),
 );
 
-// A recorded score is coloured on a continuous scale: 0 is green, 10 is red,
-// and everything between blends the two through the yellow-green midpoint.
-const SEVERITY_GRADIENT =
-    'linear-gradient(to right, hsl(140 70% 38%), hsl(70 70% 38%), hsl(0 70% 38%))';
+// A recorded score is coloured on a fixed 11-step green-to-red scale (a
+// reversed ColorBrewer RdYlGn ramp) so every score 0-10 has its own vivid,
+// clearly distinguishable colour rather than a muddy interpolation.
+const SCORE_COLORS = [
+    '#1a9850', // 0
+    '#5cb15c', // 1
+    '#91cf60', // 2
+    '#c3e77d', // 3
+    '#e6f5a3', // 4
+    '#feffbe', // 5
+    '#fee08b', // 6
+    '#fdb567', // 7
+    '#f57e4a', // 8
+    '#de4f35', // 9
+    '#a50026', // 10
+] as const;
 
-const scoreColor = (score: number): string => {
-    const clamped = Math.min(Math.max(score, 0), 10);
-    const hue = 140 - (clamped / 10) * 140;
+const SEVERITY_GRADIENT = `linear-gradient(to right, ${SCORE_COLORS.join(', ')})`;
 
-    return `hsl(${hue} 70% 38%)`;
+const clampScore = (score: number): number =>
+    Math.min(Math.max(Math.round(score), 0), 10);
+
+const scoreColor = (score: number): string => SCORE_COLORS[clampScore(score)];
+
+// The pale middle of the scale needs dark text; the saturated ends need light
+// text. Pick per cell from the colour's relative luminance.
+const scoreTextColor = (score: number): string => {
+    const hex = scoreColor(score).slice(1);
+    const [r, g, b] = [0, 2, 4].map(
+        (i) => parseInt(hex.slice(i, i + 2), 16) / 255,
+    );
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#1f2937' : '#ffffff';
 };
 
-// Past days without a score use a hatched neutral fill so they never read as a
-// green (low) score; future days use a flat, dashed-outline fill so they stay
-// separable from an unfilled past day at a glance.
+// Past days without a score use a hatched fill so they never read as a green
+// (low) score. Future days use an outlined, empty cell and non-existent days a
+// faint flat block, so all three stay separable at a glance.
 const HATCH_FILL =
-    '[background-image:repeating-linear-gradient(45deg,var(--border)_0,var(--border)_2px,transparent_2px,transparent_6px)]';
+    '[background-image:repeating-linear-gradient(45deg,var(--muted-foreground)_0,var(--muted-foreground)_1px,transparent_1px,transparent_5px)] [background-color:var(--muted)]';
 
 const cellClass: Record<DayCell['kind'], string> = {
-    nonexistent: 'bg-muted/40 text-transparent',
-    future: 'border border-dashed border-border bg-muted/50 text-muted-foreground/50',
-    unscored: `cursor-pointer border border-border bg-muted text-muted-foreground hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
-    scored: 'cursor-pointer text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring',
+    nonexistent: 'bg-muted/30 text-transparent',
+    future: 'border border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground/40',
+    unscored: `relative cursor-pointer border border-border text-muted-foreground hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
+    scored: 'cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring',
 };
 
-const missedMedicationClass =
-    'cursor-pointer border border-orange-600 bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-2 focus-visible:ring-ring';
-
-const classFor = (cell: DayCell): string => {
-    if (cell.kind === 'unscored' && cell.missedMedication) {
-        return missedMedicationClass;
-    }
-
-    if (cell.kind === 'scored' && cell.missedMedication) {
-        return `${cellClass.scored} ring-2 ring-inset ring-orange-500`;
-    }
-
-    return cellClass[cell.kind];
-};
+const classFor = (cell: DayCell): string => cellClass[cell.kind];
 
 const styleFor = (cell: DayCell): Record<string, string> =>
-    cell.kind === 'scored' ? { backgroundColor: scoreColor(cell.score) } : {};
+    cell.kind === 'scored'
+        ? {
+              backgroundColor: scoreColor(cell.score),
+              color: scoreTextColor(cell.score),
+          }
+        : {};
 
 const scheduledDosesFor = (date: string | null): ScheduledDose[] =>
     date === null ? [] : (props.scheduledDosesByDay[date] ?? []);
@@ -358,7 +373,7 @@ const formattedSelectedDate = computed(() =>
                             <button
                                 v-if="cell.kind === 'unscored'"
                                 type="button"
-                                class="flex aspect-square w-full items-center justify-center rounded text-xs"
+                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs"
                                 :class="[
                                     classFor(cell),
                                     isToday(cell) && todayClass,
@@ -378,7 +393,13 @@ const formattedSelectedDate = computed(() =>
                                         : undefined
                                 "
                                 @click="openDay(cell)"
-                            />
+                            >
+                                <span
+                                    v-if="cell.missedMedication"
+                                    class="ring-background absolute top-0.5 left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                                    aria-hidden="true"
+                                />
+                            </button>
                             <button
                                 v-else-if="cell.kind === 'scored'"
                                 type="button"
@@ -404,6 +425,11 @@ const formattedSelectedDate = computed(() =>
                                 @click="openScored(cell)"
                             >
                                 <span>{{ cell.score }}</span>
+                                <span
+                                    v-if="cell.missedMedication"
+                                    class="ring-background absolute top-0.5 left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                                    aria-hidden="true"
+                                />
                                 <PillIcon
                                     v-if="cell.tookMedication"
                                     class="absolute top-0.5 right-0.5 size-1.5"
@@ -445,8 +471,15 @@ const formattedSelectedDate = computed(() =>
                 Needs a score
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-orange-500" /> Scheduled
-                medication missing
+                <span
+                    class="border-border relative size-3 rounded border"
+                    :class="HATCH_FILL"
+                >
+                    <span
+                        class="ring-background absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                    />
+                </span>
+                Scheduled medication missing
             </span>
             <span class="flex items-center gap-1.5">
                 <span
@@ -458,7 +491,7 @@ const formattedSelectedDate = computed(() =>
             </span>
             <span class="flex items-center gap-1.5">
                 <span
-                    class="border-border bg-muted/50 size-3 rounded border border-dashed"
+                    class="border-muted-foreground/40 size-3 rounded border border-dashed bg-transparent"
                 />
                 Future
             </span>
@@ -469,7 +502,7 @@ const formattedSelectedDate = computed(() =>
                 Today
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="bg-muted/40 size-3 rounded" /> Not a date
+                <span class="bg-muted/30 size-3 rounded" /> Not a date
             </span>
         </div>
     </div>
