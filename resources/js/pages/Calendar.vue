@@ -148,21 +148,22 @@ const rows = computed<DayCell[][]>(() =>
     }),
 );
 
-// A recorded score is coloured on a fixed 11-step green-to-red scale (a
-// reversed ColorBrewer RdYlGn ramp) so every score 0-10 has its own vivid,
-// clearly distinguishable colour rather than a muddy interpolation.
+// A recorded score is coloured on a fixed 11-step scale so every score 0-10
+// has its own vivid, clearly distinguishable colour rather than a muddy
+// interpolation: greens for the low end, a pair of yellows through the middle,
+// then light orange to dark red climbing to 10.
 const SCORE_COLORS = [
-    '#1a9850', // 0
-    '#5cb15c', // 1
-    '#91cf60', // 2
-    '#c3e77d', // 3
-    '#e6f5a3', // 4
-    '#feffbe', // 5
-    '#fee08b', // 6
-    '#fdb567', // 7
-    '#f57e4a', // 8
-    '#de4f35', // 9
-    '#a50026', // 10
+    '#157f3b', // 0  dark green
+    '#43a047', // 1  green
+    '#8bc34a', // 2  light green
+    '#cddc39', // 3  yellow-green
+    '#ffde3d', // 4  yellow
+    '#ffc21f', // 5  golden yellow
+    '#ffa52b', // 6  light orange
+    '#fb8c00', // 7  orange
+    '#ef6c00', // 8  dark orange
+    '#e53935', // 9  red
+    '#b71c1c', // 10 dark red
 ] as const;
 
 const SEVERITY_GRADIENT = `linear-gradient(to right, ${SCORE_COLORS.join(', ')})`;
@@ -180,7 +181,7 @@ const scoreTextColor = (score: number): string => {
         (i) => parseInt(hex.slice(i, i + 2), 16) / 255,
     );
 
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#1f2937' : '#ffffff';
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.62 ? '#1f2937' : '#ffffff';
 };
 
 // Past days without a score use a hatched fill so they never read as a green
@@ -396,7 +397,7 @@ const formattedSelectedDate = computed(() =>
                             >
                                 <span
                                     v-if="cell.missedMedication"
-                                    class="ring-background absolute top-0.5 left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                                    class="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
                                     aria-hidden="true"
                                 />
                             </button>
@@ -427,7 +428,7 @@ const formattedSelectedDate = computed(() =>
                                 <span>{{ cell.score }}</span>
                                 <span
                                     v-if="cell.missedMedication"
-                                    class="ring-background absolute top-0.5 left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                                    class="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
                                     aria-hidden="true"
                                 />
                                 <PillIcon
@@ -476,7 +477,7 @@ const formattedSelectedDate = computed(() =>
                     :class="HATCH_FILL"
                 >
                     <span
-                        class="ring-background absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-amber-500 ring-1"
+                        class="absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
                     />
                 </span>
                 Scheduled medication missing
