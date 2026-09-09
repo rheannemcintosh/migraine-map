@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, TriangleAlert } from '@lucide/vue';
 import DayLogForm from '@/components/DayLogForm.vue';
 import PillIcon from '@/components/PillIcon.vue';
 import { useMediaQuery } from '@vueuse/core';
@@ -430,7 +430,7 @@ const formattedSelectedDate = computed(() =>
                                             ? 'true'
                                             : undefined
                                     "
-                                    :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', scheduled medication missing' : ''}`"
+                                    :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', daily medication not taken' : ''}`"
                                     @click="openScored(cell)"
                                 >
                                     <span>{{ cell.score }}</span>
@@ -443,8 +443,14 @@ const formattedSelectedDate = computed(() =>
                                             :class="MISSED_DOSE_DOT"
                                             aria-hidden="true"
                                         />
-                                        <TooltipContent>
-                                            Scheduled medication missing
+                                        <TooltipContent
+                                            class="flex items-center gap-1.5 font-medium"
+                                        >
+                                            <TriangleAlert
+                                                class="size-3.5 shrink-0"
+                                                aria-hidden="true"
+                                            />
+                                            Daily medication not taken
                                         </TooltipContent>
                                     </Tooltip>
                                     <PillIcon
@@ -497,7 +503,7 @@ const formattedSelectedDate = computed(() =>
                         class="absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-white"
                     />
                 </span>
-                Scheduled medication missing (on a scored day)
+                Daily medication not taken (on a scored day)
             </span>
             <span class="flex items-center gap-1.5">
                 <span
