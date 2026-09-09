@@ -115,11 +115,11 @@ const missedMedicationDaySet = computed(
     () => new Set(props.missedMedicationDays),
 );
 
+// One row per month, one cell per day of the month (1-31).
 const rows = computed<DayCell[][]>(() =>
-    Array.from({ length: 31 }, (_, dayIndex) => {
-        const day = dayIndex + 1;
-
-        return MONTHS.map((_, month): DayCell => {
+    MONTHS.map((_, month) =>
+        Array.from({ length: 31 }, (_, dayIndex): DayCell => {
+            const day = dayIndex + 1;
             const key = `${props.year}-${pad(month + 1)}-${pad(day)}`;
 
             if (day > daysInMonth(props.year, month)) {
@@ -150,8 +150,8 @@ const rows = computed<DayCell[][]>(() =>
                 key,
                 date: key,
             };
-        });
-    }),
+        }),
+    ),
 );
 
 // A recorded score is coloured on a fixed 11-step scale so every score 0-10
@@ -339,7 +339,7 @@ const formattedSelectedDate = computed(() =>
 <template>
     <Head :title="`Calendar ${year}`" />
 
-    <div class="mx-auto flex h-full w-full max-w-lg flex-1 flex-col gap-4 p-4">
+    <div class="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-4 p-4">
         <div class="flex items-center justify-between">
             <Button as-child variant="outline" size="icon">
                 <Link
@@ -365,26 +365,29 @@ const formattedSelectedDate = computed(() =>
         <TooltipProvider :delay-duration="150" disable-hoverable-content>
             <div class="overflow-x-auto">
                 <table
-                    class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
+                    class="w-full min-w-[72rem] table-fixed border-separate border-spacing-1"
                 >
                     <thead>
                         <tr>
-                            <th class="w-8"></th>
+                            <th class="w-10"></th>
                             <th
-                                v-for="month in MONTHS"
-                                :key="month"
-                                class="text-muted-foreground text-xs font-medium"
+                                v-for="day in 31"
+                                :key="day"
+                                class="text-muted-foreground text-center text-xs font-medium"
                             >
-                                {{ month }}
+                                {{ day }}
                             </th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(row, dayIndex) in rows" :key="dayIndex">
+                        <tr
+                            v-for="(row, monthIndex) in rows"
+                            :key="MONTHS[monthIndex]"
+                        >
                             <th
                                 class="text-muted-foreground text-right text-xs font-medium"
                             >
-                                {{ dayIndex + 1 }}
+                                {{ MONTHS[monthIndex] }}
                             </th>
                             <td v-for="cell in row" :key="cell.key" class="p-0">
                                 <button
