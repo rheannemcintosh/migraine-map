@@ -339,7 +339,7 @@ const formattedSelectedDate = computed(() =>
 <template>
     <Head :title="`Calendar ${year}`" />
 
-    <div class="mx-auto flex h-full w-full max-w-4xl flex-1 flex-col gap-4 p-4">
+    <div class="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col gap-4 p-4">
         <div class="flex items-center justify-between">
             <Button as-child variant="outline" size="icon">
                 <Link
@@ -365,7 +365,7 @@ const formattedSelectedDate = computed(() =>
         <TooltipProvider :delay-duration="150" disable-hoverable-content>
             <div class="overflow-x-auto">
                 <table
-                    class="w-full min-w-[48rem] table-fixed border-separate border-spacing-1"
+                    class="w-full min-w-[72rem] table-fixed border-separate border-spacing-1"
                 >
                     <thead>
                         <tr>
