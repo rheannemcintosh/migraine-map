@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, TriangleAlert } from '@lucide/vue';
 import DayLogForm from '@/components/DayLogForm.vue';
 import PillIcon from '@/components/PillIcon.vue';
+import { useMediaQuery } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
     Dialog,
     DialogContent,
@@ -58,7 +65,7 @@ type Props = {
 type DayCell =
     | { kind: 'nonexistent'; key: string }
     | { kind: 'future'; key: string; date: string }
-    | { kind: 'unscored'; key: string; date: string; missedMedication: boolean }
+    | { kind: 'unscored'; key: string; date: string }
     | {
           kind: 'scored';
           key: string;
@@ -142,28 +149,78 @@ const rows = computed<DayCell[][]>(() =>
                 kind: 'unscored',
                 key,
                 date: key,
-                missedMedication: missedMedicationDaySet.value.has(key),
             };
         });
     }),
 );
 
-const cellClass: Record<DayCell['kind'], string> = {
-    nonexistent: 'bg-muted/40 text-transparent',
-    future: 'bg-muted text-muted-foreground/50',
-    unscored:
-        'cursor-pointer bg-red-500 text-white hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-ring',
-    scored: 'cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-ring',
+// A recorded score is coloured on a fixed 11-step scale so every score 0-10
+// has its own vivid, clearly distinguishable colour rather than a muddy
+// interpolation: greens for the low end, a pair of yellows through the middle,
+// then light orange to dark red climbing to 10.
+const SCORE_COLORS = [
+    '#157f3b', // 0  dark green
+    '#43a047', // 1  green
+    '#8bc34a', // 2  light green
+    '#cddc39', // 3  yellow-green
+    '#ffde3d', // 4  yellow
+    '#ffc21f', // 5  golden yellow
+    '#ffa52b', // 6  light orange
+    '#fb8c00', // 7  orange
+    '#ef6c00', // 8  dark orange
+    '#e53935', // 9  red
+    '#b71c1c', // 10 dark red
+] as const;
+
+const SEVERITY_GRADIENT = `linear-gradient(to right, ${SCORE_COLORS.join(', ')})`;
+
+const clampScore = (score: number): number =>
+    Math.min(Math.max(Math.round(score), 0), 10);
+
+const scoreColor = (score: number): string => SCORE_COLORS[clampScore(score)];
+
+// The pale middle of the scale needs dark text; the saturated ends need light
+// text. Pick per cell from the colour's relative luminance.
+const scoreTextColor = (score: number): string => {
+    const hex = scoreColor(score).slice(1);
+    const [r, g, b] = [0, 2, 4].map(
+        (i) => parseInt(hex.slice(i, i + 2), 16) / 255,
+    );
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.62 ? '#1f2937' : '#ffffff';
 };
 
-const missedMedicationClass =
-    'cursor-pointer bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-2 focus-visible:ring-ring';
+// Past days without a score use a hatched fill so they never read as a green
+// (low) score. Future days use an outlined, empty cell and non-existent days a
+// faint flat block, so all three stay separable at a glance.
+const HATCH_FILL =
+    '[background-image:repeating-linear-gradient(45deg,var(--muted-foreground)_0,var(--muted-foreground)_1px,transparent_1px,transparent_5px)] [background-color:var(--muted)]';
 
-const classFor = (cell: DayCell): string =>
-    (cell.kind === 'unscored' || cell.kind === 'scored') &&
-    cell.missedMedication
-        ? missedMedicationClass
-        : cellClass[cell.kind];
+const cellClass: Record<DayCell['kind'], string> = {
+    nonexistent: 'bg-muted/30 text-transparent',
+    future: 'border border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground/40',
+    unscored: `cursor-pointer border border-border text-muted-foreground hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
+    scored: 'cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring',
+};
+
+const classFor = (cell: DayCell): string => cellClass[cell.kind];
+
+// The marker sits in the corner of a scored cell and takes the cell's own
+// text colour (black or white) so it always contrasts with the heat colour.
+const MISSED_DOSE_DOT =
+    'absolute top-0.5 left-0.5 size-1.5 rounded-full bg-current';
+
+// The marker's tooltip is a hover affordance, so only enable it on the larger,
+// pointer-friendly screens where hovering a 6px target is realistic.
+const showDoseTooltip = useMediaQuery('(min-width: 1024px)');
+
+const styleFor = (cell: DayCell): Record<string, string> =>
+    cell.kind === 'scored'
+        ? {
+              backgroundColor: scoreColor(cell.score),
+              color: scoreTextColor(cell.score),
+          }
+        : {};
 
 const scheduledDosesFor = (date: string | null): ScheduledDose[] =>
     date === null ? [] : (props.scheduledDosesByDay[date] ?? []);
@@ -305,124 +362,161 @@ const formattedSelectedDate = computed(() =>
             </Button>
         </div>
 
-        <div class="overflow-x-auto">
-            <table
-                class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
-            >
-                <thead>
-                    <tr>
-                        <th class="w-8"></th>
-                        <th
-                            v-for="month in MONTHS"
-                            :key="month"
-                            class="text-muted-foreground text-xs font-medium"
-                        >
-                            {{ month }}
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(row, dayIndex) in rows" :key="dayIndex">
-                        <th
-                            class="text-muted-foreground text-right text-xs font-medium"
-                        >
-                            {{ dayIndex + 1 }}
-                        </th>
-                        <td v-for="cell in row" :key="cell.key" class="p-0">
-                            <button
-                                v-if="cell.kind === 'unscored'"
-                                type="button"
-                                class="flex aspect-square w-full items-center justify-center rounded text-xs"
-                                :class="[
-                                    classFor(cell),
-                                    isToday(cell) && todayClass,
-                                ]"
-                                :aria-label="`Log score for ${cell.date}`"
-                                :aria-current="
-                                    isToday(cell) ? 'date' : undefined
-                                "
-                                :data-date="cell.date"
-                                :data-today="isToday(cell) ? 'true' : undefined"
-                                :data-missed-medication="
-                                    cell.missedMedication ? 'true' : undefined
-                                "
-                                :title="
-                                    cell.missedMedication
-                                        ? `${cell.date}: scheduled medication missing`
-                                        : undefined
-                                "
-                                @click="openDay(cell)"
-                            />
-                            <button
-                                v-else-if="cell.kind === 'scored'"
-                                type="button"
-                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="[
-                                    classFor(cell),
-                                    isToday(cell) && todayClass,
-                                ]"
-                                :aria-label="`Edit score for ${cell.date}`"
-                                :aria-current="
-                                    isToday(cell) ? 'date' : undefined
-                                "
-                                :data-date="cell.date"
-                                :data-today="isToday(cell) ? 'true' : undefined"
-                                :data-medication="
-                                    cell.tookMedication ? 'true' : undefined
-                                "
-                                :data-missed-medication="
-                                    cell.missedMedication ? 'true' : undefined
-                                "
-                                :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', scheduled medication missing' : ''}`"
-                                @click="openScored(cell)"
+        <TooltipProvider :delay-duration="150" disable-hoverable-content>
+            <div class="overflow-x-auto">
+                <table
+                    class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
+                >
+                    <thead>
+                        <tr>
+                            <th class="w-8"></th>
+                            <th
+                                v-for="month in MONTHS"
+                                :key="month"
+                                class="text-muted-foreground text-xs font-medium"
                             >
-                                <span>{{ cell.score }}</span>
-                                <PillIcon
-                                    v-if="cell.tookMedication"
-                                    class="absolute top-0.5 right-0.5 size-1.5"
-                                    aria-label="Medication taken"
+                                {{ month }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, dayIndex) in rows" :key="dayIndex">
+                            <th
+                                class="text-muted-foreground text-right text-xs font-medium"
+                            >
+                                {{ dayIndex + 1 }}
+                            </th>
+                            <td v-for="cell in row" :key="cell.key" class="p-0">
+                                <button
+                                    v-if="cell.kind === 'unscored'"
+                                    type="button"
+                                    class="flex aspect-square w-full items-center justify-center rounded text-xs"
+                                    :class="[
+                                        classFor(cell),
+                                        isToday(cell) && todayClass,
+                                    ]"
+                                    :aria-label="`Log score for ${cell.date}`"
+                                    :aria-current="
+                                        isToday(cell) ? 'date' : undefined
+                                    "
+                                    :data-date="cell.date"
+                                    :data-today="
+                                        isToday(cell) ? 'true' : undefined
+                                    "
+                                    @click="openDay(cell)"
                                 />
-                            </button>
-                            <div
-                                v-else
-                                class="flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="cellClass[cell.kind]"
-                                :data-date="
-                                    cell.kind === 'nonexistent'
-                                        ? undefined
-                                        : cell.date
-                                "
-                            />
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                                <button
+                                    v-else-if="cell.kind === 'scored'"
+                                    type="button"
+                                    class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                    :class="[
+                                        classFor(cell),
+                                        isToday(cell) && todayClass,
+                                    ]"
+                                    :style="styleFor(cell)"
+                                    :aria-label="`Edit score for ${cell.date}`"
+                                    :aria-current="
+                                        isToday(cell) ? 'date' : undefined
+                                    "
+                                    :data-date="cell.date"
+                                    :data-today="
+                                        isToday(cell) ? 'true' : undefined
+                                    "
+                                    :data-medication="
+                                        cell.tookMedication ? 'true' : undefined
+                                    "
+                                    :data-missed-medication="
+                                        cell.missedMedication
+                                            ? 'true'
+                                            : undefined
+                                    "
+                                    @click="openScored(cell)"
+                                >
+                                    <span>{{ cell.score }}</span>
+                                    <Tooltip
+                                        v-if="cell.missedMedication"
+                                        :disabled="!showDoseTooltip"
+                                    >
+                                        <TooltipTrigger
+                                            as="span"
+                                            :class="MISSED_DOSE_DOT"
+                                            aria-hidden="true"
+                                        />
+                                        <TooltipContent
+                                            class="flex items-center gap-1.5 font-medium"
+                                        >
+                                            <TriangleAlert
+                                                class="size-3.5 shrink-0"
+                                                aria-hidden="true"
+                                            />
+                                            Daily medication not taken
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <PillIcon
+                                        v-if="cell.tookMedication"
+                                        class="absolute top-0.5 right-0.5 size-1.5"
+                                        aria-label="Medication taken"
+                                    />
+                                </button>
+                                <div
+                                    v-else
+                                    class="flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                    :class="cellClass[cell.kind]"
+                                    :data-date="
+                                        cell.kind === 'nonexistent'
+                                            ? undefined
+                                            : cell.date
+                                    "
+                                />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </TooltipProvider>
 
         <div
             class="text-muted-foreground flex flex-wrap gap-4 text-xs"
             aria-label="Legend"
         >
             <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-red-500" /> Needs a score
-            </span>
-            <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-emerald-500" /> Scored
-            </span>
-            <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-orange-500" /> Scheduled
-                medication missing
+                <span
+                    class="h-3 w-16 rounded"
+                    :style="{ backgroundImage: SEVERITY_GRADIENT }"
+                />
+                Score 0 (green) to 10 (red)
             </span>
             <span class="flex items-center gap-1.5">
                 <span
-                    class="flex size-3 items-center justify-center rounded bg-emerald-500 text-white"
+                    class="border-border size-3 rounded border"
+                    :class="HATCH_FILL"
+                />
+                Needs a score
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span
+                    class="relative size-3 rounded"
+                    :style="{ backgroundColor: SCORE_COLORS[8] }"
+                >
+                    <span
+                        class="absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-white"
+                    />
+                </span>
+                Daily medication not taken (on a scored day)
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span
+                    class="bg-muted-foreground flex size-3 items-center justify-center rounded text-white"
                 >
                     <PillIcon class="size-2" aria-hidden="true" />
                 </span>
                 Medication taken
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="bg-muted size-3 rounded" /> Future
+                <span
+                    class="border-muted-foreground/40 size-3 rounded border border-dashed bg-transparent"
+                />
+                Future
             </span>
             <span class="flex items-center gap-1.5">
                 <span
@@ -431,7 +525,7 @@ const formattedSelectedDate = computed(() =>
                 Today
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="bg-muted/40 size-3 rounded" /> Not a date
+                <span class="bg-muted/30 size-3 rounded" /> Not a date
             </span>
         </div>
     </div>
