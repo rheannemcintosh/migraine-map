@@ -3,9 +3,16 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import DayLogForm from '@/components/DayLogForm.vue';
 import PillIcon from '@/components/PillIcon.vue';
+import { useMediaQuery } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
     Dialog,
     DialogContent,
@@ -199,6 +206,13 @@ const cellClass: Record<DayCell['kind'], string> = {
 
 const classFor = (cell: DayCell): string => cellClass[cell.kind];
 
+const MISSED_DOSE_DOT =
+    'absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black';
+
+// The marker's tooltip is a hover affordance, so only enable it on the larger,
+// pointer-friendly screens where hovering a 6px target is realistic.
+const showDoseTooltip = useMediaQuery('(min-width: 1024px)');
+
 const styleFor = (cell: DayCell): Record<string, string> =>
     cell.kind === 'scored'
         ? {
@@ -347,111 +361,137 @@ const formattedSelectedDate = computed(() =>
             </Button>
         </div>
 
-        <div class="overflow-x-auto">
-            <table
-                class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
-            >
-                <thead>
-                    <tr>
-                        <th class="w-8"></th>
-                        <th
-                            v-for="month in MONTHS"
-                            :key="month"
-                            class="text-muted-foreground text-xs font-medium"
-                        >
-                            {{ month }}
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(row, dayIndex) in rows" :key="dayIndex">
-                        <th
-                            class="text-muted-foreground text-right text-xs font-medium"
-                        >
-                            {{ dayIndex + 1 }}
-                        </th>
-                        <td v-for="cell in row" :key="cell.key" class="p-0">
-                            <button
-                                v-if="cell.kind === 'unscored'"
-                                type="button"
-                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs"
-                                :class="[
-                                    classFor(cell),
-                                    isToday(cell) && todayClass,
-                                ]"
-                                :aria-label="`Log score for ${cell.date}`"
-                                :aria-current="
-                                    isToday(cell) ? 'date' : undefined
-                                "
-                                :data-date="cell.date"
-                                :data-today="isToday(cell) ? 'true' : undefined"
-                                :data-missed-medication="
-                                    cell.missedMedication ? 'true' : undefined
-                                "
-                                :title="
-                                    cell.missedMedication
-                                        ? `${cell.date}: scheduled medication missing`
-                                        : undefined
-                                "
-                                @click="openDay(cell)"
+        <TooltipProvider :delay-duration="150" disable-hoverable-content>
+            <div class="overflow-x-auto">
+                <table
+                    class="w-full min-w-[26rem] table-fixed border-separate border-spacing-1"
+                >
+                    <thead>
+                        <tr>
+                            <th class="w-8"></th>
+                            <th
+                                v-for="month in MONTHS"
+                                :key="month"
+                                class="text-muted-foreground text-xs font-medium"
                             >
-                                <span
-                                    v-if="cell.missedMedication"
-                                    class="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
-                                    aria-hidden="true"
-                                />
-                            </button>
-                            <button
-                                v-else-if="cell.kind === 'scored'"
-                                type="button"
-                                class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="[
-                                    classFor(cell),
-                                    isToday(cell) && todayClass,
-                                ]"
-                                :style="styleFor(cell)"
-                                :aria-label="`Edit score for ${cell.date}`"
-                                :aria-current="
-                                    isToday(cell) ? 'date' : undefined
-                                "
-                                :data-date="cell.date"
-                                :data-today="isToday(cell) ? 'true' : undefined"
-                                :data-medication="
-                                    cell.tookMedication ? 'true' : undefined
-                                "
-                                :data-missed-medication="
-                                    cell.missedMedication ? 'true' : undefined
-                                "
-                                :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', scheduled medication missing' : ''}`"
-                                @click="openScored(cell)"
+                                {{ month }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, dayIndex) in rows" :key="dayIndex">
+                            <th
+                                class="text-muted-foreground text-right text-xs font-medium"
                             >
-                                <span>{{ cell.score }}</span>
-                                <span
-                                    v-if="cell.missedMedication"
-                                    class="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
-                                    aria-hidden="true"
+                                {{ dayIndex + 1 }}
+                            </th>
+                            <td v-for="cell in row" :key="cell.key" class="p-0">
+                                <button
+                                    v-if="cell.kind === 'unscored'"
+                                    type="button"
+                                    class="relative flex aspect-square w-full items-center justify-center rounded text-xs"
+                                    :class="[
+                                        classFor(cell),
+                                        isToday(cell) && todayClass,
+                                    ]"
+                                    :aria-label="`Log score for ${cell.date}`"
+                                    :aria-current="
+                                        isToday(cell) ? 'date' : undefined
+                                    "
+                                    :data-date="cell.date"
+                                    :data-today="
+                                        isToday(cell) ? 'true' : undefined
+                                    "
+                                    :data-missed-medication="
+                                        cell.missedMedication
+                                            ? 'true'
+                                            : undefined
+                                    "
+                                    :title="
+                                        cell.missedMedication
+                                            ? `${cell.date}: scheduled medication missing`
+                                            : undefined
+                                    "
+                                    @click="openDay(cell)"
+                                >
+                                    <Tooltip
+                                        v-if="cell.missedMedication"
+                                        :disabled="!showDoseTooltip"
+                                    >
+                                        <TooltipTrigger
+                                            as="span"
+                                            :class="MISSED_DOSE_DOT"
+                                            aria-hidden="true"
+                                        />
+                                        <TooltipContent>
+                                            Scheduled medication missing
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </button>
+                                <button
+                                    v-else-if="cell.kind === 'scored'"
+                                    type="button"
+                                    class="relative flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                    :class="[
+                                        classFor(cell),
+                                        isToday(cell) && todayClass,
+                                    ]"
+                                    :style="styleFor(cell)"
+                                    :aria-label="`Edit score for ${cell.date}`"
+                                    :aria-current="
+                                        isToday(cell) ? 'date' : undefined
+                                    "
+                                    :data-date="cell.date"
+                                    :data-today="
+                                        isToday(cell) ? 'true' : undefined
+                                    "
+                                    :data-medication="
+                                        cell.tookMedication ? 'true' : undefined
+                                    "
+                                    :data-missed-medication="
+                                        cell.missedMedication
+                                            ? 'true'
+                                            : undefined
+                                    "
+                                    :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', scheduled medication missing' : ''}`"
+                                    @click="openScored(cell)"
+                                >
+                                    <span>{{ cell.score }}</span>
+                                    <Tooltip
+                                        v-if="cell.missedMedication"
+                                        :disabled="!showDoseTooltip"
+                                    >
+                                        <TooltipTrigger
+                                            as="span"
+                                            :class="MISSED_DOSE_DOT"
+                                            aria-hidden="true"
+                                        />
+                                        <TooltipContent>
+                                            Scheduled medication missing
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <PillIcon
+                                        v-if="cell.tookMedication"
+                                        class="absolute top-0.5 right-0.5 size-1.5"
+                                        aria-label="Medication taken"
+                                    />
+                                </button>
+                                <div
+                                    v-else
+                                    class="flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
+                                    :class="cellClass[cell.kind]"
+                                    :data-date="
+                                        cell.kind === 'nonexistent'
+                                            ? undefined
+                                            : cell.date
+                                    "
                                 />
-                                <PillIcon
-                                    v-if="cell.tookMedication"
-                                    class="absolute top-0.5 right-0.5 size-1.5"
-                                    aria-label="Medication taken"
-                                />
-                            </button>
-                            <div
-                                v-else
-                                class="flex aspect-square w-full items-center justify-center rounded text-xs font-semibold"
-                                :class="cellClass[cell.kind]"
-                                :data-date="
-                                    cell.kind === 'nonexistent'
-                                        ? undefined
-                                        : cell.date
-                                "
-                            />
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </TooltipProvider>
 
         <div
             class="text-muted-foreground flex flex-wrap gap-4 text-xs"
