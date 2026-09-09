@@ -430,7 +430,6 @@ const formattedSelectedDate = computed(() =>
                                             ? 'true'
                                             : undefined
                                     "
-                                    :title="`${cell.date}: score ${cell.score}${cell.tookMedication ? ', medication taken' : ''}${cell.missedMedication ? ', daily medication not taken' : ''}`"
                                     @click="openScored(cell)"
                                 >
                                     <span>{{ cell.score }}</span>
