@@ -65,7 +65,7 @@ type Props = {
 type DayCell =
     | { kind: 'nonexistent'; key: string }
     | { kind: 'future'; key: string; date: string }
-    | { kind: 'unscored'; key: string; date: string; missedMedication: boolean }
+    | { kind: 'unscored'; key: string; date: string }
     | {
           kind: 'scored';
           key: string;
@@ -149,7 +149,6 @@ const rows = computed<DayCell[][]>(() =>
                 kind: 'unscored',
                 key,
                 date: key,
-                missedMedication: missedMedicationDaySet.value.has(key),
             };
         });
     }),
@@ -200,14 +199,16 @@ const HATCH_FILL =
 const cellClass: Record<DayCell['kind'], string> = {
     nonexistent: 'bg-muted/30 text-transparent',
     future: 'border border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground/40',
-    unscored: `relative cursor-pointer border border-border text-muted-foreground hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
+    unscored: `cursor-pointer border border-border text-muted-foreground hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
     scored: 'cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring',
 };
 
 const classFor = (cell: DayCell): string => cellClass[cell.kind];
 
+// The marker sits in the corner of a scored cell and takes the cell's own
+// text colour (black or white) so it always contrasts with the heat colour.
 const MISSED_DOSE_DOT =
-    'absolute top-0.5 left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black';
+    'absolute top-0.5 left-0.5 size-1.5 rounded-full bg-current';
 
 // The marker's tooltip is a hover affordance, so only enable it on the larger,
 // pointer-friendly screens where hovering a 6px target is realistic.
@@ -389,7 +390,7 @@ const formattedSelectedDate = computed(() =>
                                 <button
                                     v-if="cell.kind === 'unscored'"
                                     type="button"
-                                    class="relative flex aspect-square w-full items-center justify-center rounded text-xs"
+                                    class="flex aspect-square w-full items-center justify-center rounded text-xs"
                                     :class="[
                                         classFor(cell),
                                         isToday(cell) && todayClass,
@@ -402,32 +403,8 @@ const formattedSelectedDate = computed(() =>
                                     :data-today="
                                         isToday(cell) ? 'true' : undefined
                                     "
-                                    :data-missed-medication="
-                                        cell.missedMedication
-                                            ? 'true'
-                                            : undefined
-                                    "
-                                    :title="
-                                        cell.missedMedication
-                                            ? `${cell.date}: scheduled medication missing`
-                                            : undefined
-                                    "
                                     @click="openDay(cell)"
-                                >
-                                    <Tooltip
-                                        v-if="cell.missedMedication"
-                                        :disabled="!showDoseTooltip"
-                                    >
-                                        <TooltipTrigger
-                                            as="span"
-                                            :class="MISSED_DOSE_DOT"
-                                            aria-hidden="true"
-                                        />
-                                        <TooltipContent>
-                                            Scheduled medication missing
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </button>
+                                />
                                 <button
                                     v-else-if="cell.kind === 'scored'"
                                     type="button"
@@ -513,14 +490,14 @@ const formattedSelectedDate = computed(() =>
             </span>
             <span class="flex items-center gap-1.5">
                 <span
-                    class="border-border relative size-3 rounded border"
-                    :class="HATCH_FILL"
+                    class="relative size-3 rounded"
+                    :style="{ backgroundColor: SCORE_COLORS[8] }"
                 >
                     <span
-                        class="absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-white ring-1 ring-black"
+                        class="absolute -top-0.5 -left-0.5 size-1.5 rounded-full bg-white"
                     />
                 </span>
-                Scheduled medication missing
+                Scheduled medication missing (on a scored day)
             </span>
             <span class="flex items-center gap-1.5">
                 <span
