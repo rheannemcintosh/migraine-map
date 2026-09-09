@@ -339,7 +339,7 @@ const formattedSelectedDate = computed(() =>
 <template>
     <Head :title="`Calendar ${year}`" />
 
-    <div class="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col gap-4 p-4">
+    <div class="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-4 p-4">
         <div class="flex items-center justify-between">
             <Button as-child variant="outline" size="icon">
                 <Link
