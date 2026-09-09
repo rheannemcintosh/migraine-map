@@ -148,22 +148,48 @@ const rows = computed<DayCell[][]>(() =>
     }),
 );
 
+// A recorded score is coloured on a continuous scale: 0 is green, 10 is red,
+// and everything between blends the two through the yellow-green midpoint.
+const SEVERITY_GRADIENT =
+    'linear-gradient(to right, hsl(140 70% 38%), hsl(70 70% 38%), hsl(0 70% 38%))';
+
+const scoreColor = (score: number): string => {
+    const clamped = Math.min(Math.max(score, 0), 10);
+    const hue = 140 - (clamped / 10) * 140;
+
+    return `hsl(${hue} 70% 38%)`;
+};
+
+// Past days without a score use a hatched neutral fill so they never read as a
+// green (low) score; future days use a flat, dashed-outline fill so they stay
+// separable from an unfilled past day at a glance.
+const HATCH_FILL =
+    '[background-image:repeating-linear-gradient(45deg,var(--border)_0,var(--border)_2px,transparent_2px,transparent_6px)]';
+
 const cellClass: Record<DayCell['kind'], string> = {
     nonexistent: 'bg-muted/40 text-transparent',
-    future: 'bg-muted text-muted-foreground/50',
-    unscored:
-        'cursor-pointer bg-red-500 text-white hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-ring',
-    scored: 'cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-ring',
+    future: 'border border-dashed border-border bg-muted/50 text-muted-foreground/50',
+    unscored: `cursor-pointer border border-border bg-muted text-muted-foreground hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring ${HATCH_FILL}`,
+    scored: 'cursor-pointer text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring',
 };
 
 const missedMedicationClass =
-    'cursor-pointer bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-2 focus-visible:ring-ring';
+    'cursor-pointer border border-orange-600 bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-2 focus-visible:ring-ring';
 
-const classFor = (cell: DayCell): string =>
-    (cell.kind === 'unscored' || cell.kind === 'scored') &&
-    cell.missedMedication
-        ? missedMedicationClass
-        : cellClass[cell.kind];
+const classFor = (cell: DayCell): string => {
+    if (cell.kind === 'unscored' && cell.missedMedication) {
+        return missedMedicationClass;
+    }
+
+    if (cell.kind === 'scored' && cell.missedMedication) {
+        return `${cellClass.scored} ring-2 ring-inset ring-orange-500`;
+    }
+
+    return cellClass[cell.kind];
+};
+
+const styleFor = (cell: DayCell): Record<string, string> =>
+    cell.kind === 'scored' ? { backgroundColor: scoreColor(cell.score) } : {};
 
 const scheduledDosesFor = (date: string | null): ScheduledDose[] =>
     date === null ? [] : (props.scheduledDosesByDay[date] ?? []);
@@ -361,6 +387,7 @@ const formattedSelectedDate = computed(() =>
                                     classFor(cell),
                                     isToday(cell) && todayClass,
                                 ]"
+                                :style="styleFor(cell)"
                                 :aria-label="`Edit score for ${cell.date}`"
                                 :aria-current="
                                     isToday(cell) ? 'date' : undefined
@@ -404,10 +431,18 @@ const formattedSelectedDate = computed(() =>
             aria-label="Legend"
         >
             <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-red-500" /> Needs a score
+                <span
+                    class="h-3 w-16 rounded"
+                    :style="{ backgroundImage: SEVERITY_GRADIENT }"
+                />
+                Score 0 (green) to 10 (red)
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-emerald-500" /> Scored
+                <span
+                    class="border-border size-3 rounded border"
+                    :class="HATCH_FILL"
+                />
+                Needs a score
             </span>
             <span class="flex items-center gap-1.5">
                 <span class="size-3 rounded bg-orange-500" /> Scheduled
@@ -415,14 +450,17 @@ const formattedSelectedDate = computed(() =>
             </span>
             <span class="flex items-center gap-1.5">
                 <span
-                    class="flex size-3 items-center justify-center rounded bg-emerald-500 text-white"
+                    class="bg-muted-foreground flex size-3 items-center justify-center rounded text-white"
                 >
                     <PillIcon class="size-2" aria-hidden="true" />
                 </span>
                 Medication taken
             </span>
             <span class="flex items-center gap-1.5">
-                <span class="bg-muted size-3 rounded" /> Future
+                <span
+                    class="border-border bg-muted/50 size-3 rounded border border-dashed"
+                />
+                Future
             </span>
             <span class="flex items-center gap-1.5">
                 <span
