@@ -4,6 +4,8 @@ use App\Enums\DoseUnit;
 use App\Enums\MedicationFrequency;
 use App\Models\Medication;
 use App\Models\MedicationIntake;
+use App\Models\MedicationSchedule;
+use App\Models\MedicationScheduleConfirmation;
 use App\Models\MigraineScore;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -211,6 +213,63 @@ test('a user cannot edit another user\'s score', function () {
         ->assertForbidden();
 
     expect($score->fresh()->score)->toBe(4);
+});
+
+test('a day\'s score can be removed', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+
+    $this->actingAs($user)
+        ->delete(route('migraine-scores.destroy', $score))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('calendar', ['year' => 2026]));
+
+    $this->assertDatabaseMissing('migraine_scores', ['id' => $score->id]);
+
+    $this->actingAs($user)
+        ->get(route('calendar', ['year' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->missing('scores.2026-03-10')
+            ->missing('scoreIds.2026-03-10')
+        );
+});
+
+test('removing a score leaves the day\'s medications untouched', function () {
+    $user = User::factory()->create();
+    $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
+    $adHoc = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::AdHoc]);
+    MedicationIntake::factory()->for($user)->for($adHoc)->create(['date' => '2026-03-10', 'quantity' => 2]);
+    $scheduled = Medication::factory()->for($user)->create(['frequency' => MedicationFrequency::OnceDaily]);
+    $schedule = MedicationSchedule::factory()->for($scheduled)->create();
+    MedicationScheduleConfirmation::factory()->for($user)->for($schedule, 'schedule')->create(['date' => '2026-03-10']);
+
+    $this->actingAs($user)
+        ->delete(route('migraine-scores.destroy', $score))
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseMissing('migraine_scores', ['id' => $score->id]);
+    $this->assertDatabaseHas('medication_intakes', [
+        'user_id' => $user->id,
+        'medication_id' => $adHoc->id,
+        'quantity' => 2,
+    ]);
+    $this->assertDatabaseHas('medication_schedule_confirmations', [
+        'user_id' => $user->id,
+        'medication_schedule_id' => $schedule->id,
+    ]);
+    expect($user->medicationIntakes()->count())->toBe(1)
+        ->and($user->medicationScheduleConfirmations()->count())->toBe(1);
+});
+
+test('a user cannot remove another user\'s score', function () {
+    $score = MigraineScore::factory()->create(['date' => '2026-03-10', 'score' => 4]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->delete(route('migraine-scores.destroy', $score))
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('migraine_scores', ['id' => $score->id]);
 });
 
 test('the calendar exposes score ids and the medications recorded each day', function () {

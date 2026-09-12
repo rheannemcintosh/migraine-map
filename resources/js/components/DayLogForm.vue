@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { store, update } from '@/routes/migraine-scores';
+import { destroy, store, update } from '@/routes/migraine-scores';
 
 type Medication = {
     id: number;
@@ -85,7 +85,45 @@ const medicationError = computed<string | undefined>(() => {
         .find((message) => message !== undefined);
 });
 
-const isSubmittable = computed(() => form.score !== null && !form.processing);
+const removing = ref(false);
+
+const isBusy = computed(() => form.processing || removing.value);
+
+const isSubmittable = computed(() => form.score !== null && !isBusy.value);
+
+// Pressing the number that is already selected clears it. On a day that has
+// a saved score this removes the score straight away; on an unsaved day it
+// simply deselects the number.
+const pressScore = (option: number): void => {
+    if (isBusy.value) {
+        return;
+    }
+
+    if (form.score !== option) {
+        form.score = option;
+
+        return;
+    }
+
+    form.score = null;
+
+    if (props.scoreId === null) {
+        return;
+    }
+
+    removing.value = true;
+
+    router.delete(destroy.url(props.scoreId), {
+        preserveScroll: true,
+        onSuccess: (): void => emit('saved'),
+        onError: (): void => {
+            form.score = option;
+        },
+        onFinish: (): void => {
+            removing.value = false;
+        },
+    });
+};
 
 const submit = (): void => {
     const options = {
@@ -121,7 +159,8 @@ const submit = (): void => {
                 :aria-checked="form.score === option"
                 :variant="form.score === option ? 'default' : 'outline'"
                 size="icon"
-                @click="form.score = option"
+                :disabled="isBusy"
+                @click="pressScore(option)"
             >
                 {{ option }}
             </Button>
