@@ -38,9 +38,10 @@ class UpdateMedicationRequest extends FormRequest
             'is_prescription' => ['required', 'boolean'],
             'is_active' => ['required', 'boolean'],
             'schedules' => ['sometimes', 'array'],
-            'schedules.*' => ['required', 'array:time_of_day,time'],
+            'schedules.*' => ['required', 'array:time_of_day,time,quantity'],
             'schedules.*.time_of_day' => ['required_without:schedules.*.time', 'prohibits:schedules.*.time', 'nullable', Rule::enum(TimeOfDay::class)],
             'schedules.*.time' => ['required_without:schedules.*.time_of_day', 'nullable', 'date_format:H:i'],
+            'schedules.*.quantity' => ['sometimes', 'integer', 'min:1', 'max:99'],
         ];
     }
 
@@ -54,6 +55,7 @@ class UpdateMedicationRequest extends FormRequest
         return [
             'schedules.*.time_of_day' => 'time of day',
             'schedules.*.time' => 'time',
+            'schedules.*.quantity' => 'quantity',
         ];
     }
 

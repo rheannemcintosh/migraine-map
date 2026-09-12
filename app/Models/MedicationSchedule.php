@@ -20,13 +20,14 @@ use Illuminate\Support\Carbon;
  * @property int $medication_id
  * @property TimeOfDay|null $time_of_day
  * @property string|null $time
+ * @property int $quantity
  * @property int $position
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Medication $medication
  * @property-read Collection<int, MedicationScheduleConfirmation> $confirmations
  */
-#[Fillable(['time_of_day', 'time', 'position'])]
+#[Fillable(['time_of_day', 'time', 'quantity', 'position'])]
 class MedicationSchedule extends Model
 {
     /** @use HasFactory<MedicationScheduleFactory> */
@@ -76,12 +77,24 @@ class MedicationSchedule extends Model
     }
 
     /**
+     * The dose as displayed to the user, prefixed with the quantity when more
+     * than one unit is taken, e.g. "2 x 50 mg" or "50 mg".
+     */
+    public function doseLabel(): string
+    {
+        $dose = $this->medication->doseLabel();
+
+        return $this->quantity > 1 ? $this->quantity.' x '.$dose : $dose;
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'time_of_day' => TimeOfDay::class,
+            'quantity' => 'integer',
             'position' => 'integer',
         ];
     }

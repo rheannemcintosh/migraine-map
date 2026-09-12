@@ -40,6 +40,7 @@ class MedicationController extends Controller
                         'id' => $schedule->id,
                         'time_of_day' => $schedule->time_of_day?->value,
                         'time' => $schedule->formattedTime(),
+                        'quantity' => $schedule->quantity,
                         'label' => $schedule->label(),
                     ])
                     ->values()

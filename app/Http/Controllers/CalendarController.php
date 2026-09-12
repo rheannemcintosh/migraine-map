@@ -149,7 +149,7 @@ class CalendarController extends Controller
                     'scheduleId' => (int) $schedule->id,
                     'medicationId' => (int) $schedule->medication_id,
                     'name' => $schedule->medication->name,
-                    'dose' => (float) $schedule->medication->dose_amount.' '.$schedule->medication->dose_unit->value,
+                    'dose' => $schedule->doseLabel(),
                     'label' => $schedule->label(),
                     'confirmationId' => ($confirmation = $confirmations->get($schedule->id.'|'.$date)) === null ? null : (int) $confirmation->id,
                 ])
