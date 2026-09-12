@@ -241,4 +241,26 @@ class CalendarController extends Controller
 
         return back(fallback: route('calendar', ['year' => $migraineScore->date->year]));
     }
+
+    /**
+     * Clear a day's score so it returns to being unscored.
+     *
+     * Medication intakes and scheduled dose confirmations recorded for the
+     * day are left untouched.
+     */
+    public function destroy(Request $request, MigraineScore $migraineScore): RedirectResponse
+    {
+        abort_unless($request->user()->is($migraineScore->user), 403);
+
+        $year = $migraineScore->date->year;
+
+        $migraineScore->delete();
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => __('Score removed.'),
+        ]);
+
+        return back(fallback: route('calendar', ['year' => $year]));
+    }
 }

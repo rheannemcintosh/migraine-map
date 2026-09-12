@@ -18,6 +18,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('migraine-scores.store');
     Route::patch('migraine-scores/{migraineScore}', [CalendarController::class, 'update'])
         ->name('migraine-scores.update');
+    Route::delete('migraine-scores/{migraineScore}', [CalendarController::class, 'destroy'])
+        ->name('migraine-scores.destroy');
     Route::post('medication-confirmations', [MedicationConfirmationController::class, 'store'])
         ->name('medication-confirmations.store');
     Route::delete('medication-confirmations/{medicationConfirmation}', [MedicationConfirmationController::class, 'destroy'])

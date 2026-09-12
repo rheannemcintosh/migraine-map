@@ -620,7 +620,7 @@ const formattedSelectedDate = computed(() =>
                 <DialogDescription>
                     {{ formattedEditDate }}. Update the migraine score (0 = no
                     migraine, 10 = worst possible) and the medications recorded
-                    for this day.
+                    for this day. Press the selected score again to remove it.
                 </DialogDescription>
             </DialogHeader>
 
