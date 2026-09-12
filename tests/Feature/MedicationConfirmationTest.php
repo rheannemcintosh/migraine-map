@@ -57,6 +57,22 @@ test('the calendar lists each scheduled dose due on a day with its confirmation 
         );
 });
 
+test('the calendar shows the quantity alongside a multi-unit scheduled dose', function () {
+    Carbon::setTestNow('2026-01-03 12:00:00');
+    $user = User::factory()->create();
+    [, $waking, $bedtime] = scheduledMedication($user);
+    $bedtime->update(['quantity' => 2]);
+
+    $this->actingAs($user)
+        ->get(route('calendar'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('scheduledDosesByDay.2026-01-02.0.scheduleId', $waking->id)
+            ->where('scheduledDosesByDay.2026-01-02.0.dose', '40 mg')
+            ->where('scheduledDosesByDay.2026-01-02.1.scheduleId', $bedtime->id)
+            ->where('scheduledDosesByDay.2026-01-02.1.dose', '2 x 40 mg')
+        );
+});
+
 test('a day with an unconfirmed scheduled dose is flagged as missing medication', function () {
     Carbon::setTestNow('2026-01-03 12:00:00');
     $user = User::factory()->create();

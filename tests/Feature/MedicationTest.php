@@ -237,6 +237,7 @@ test('the medications page includes each medication\'s schedule in order', funct
                 ->has('schedules', 2)
                 ->where('schedules.0.time_of_day', 'waking')
                 ->where('schedules.0.time', null)
+                ->where('schedules.0.quantity', 1)
                 ->where('schedules.0.label', 'Upon waking')
                 ->where('schedules.1.time_of_day', null)
                 ->where('schedules.1.time', '21:30')
@@ -282,8 +283,56 @@ test('a medication can be declared with a single night-time dose', function () {
     expect($medication->schedules)->toHaveCount(1)
         ->and($medication->schedules[0]->time_of_day)->toBe(TimeOfDay::Night)
         ->and($medication->schedules[0]->time)->toBeNull()
+        ->and($medication->schedules[0]->quantity)->toBe(1)
         ->and($medication->schedules[0]->position)->toBe(0);
 });
+
+test('a scheduled dose can be made up of more than one unit', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('medications.store'), [
+            'name' => 'Nortriptyline',
+            'dose_amount' => 50,
+            'dose_unit' => 'mg',
+            'frequency' => 'once_daily',
+            'is_prescription' => true,
+            'is_active' => true,
+            'schedules' => [
+                ['time_of_day' => 'night', 'time' => null, 'quantity' => 2],
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $schedule = $user->medications()->firstOrFail()->schedules->sole();
+
+    expect($schedule->quantity)->toBe(2)
+        ->and($schedule->doseLabel())->toBe('2 x 50 mg');
+
+    $this->actingAs($user)
+        ->get(route('medications'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('medications.0.schedules.0.quantity', 2)
+        );
+});
+
+test('a scheduled dose quantity must be a positive whole number', function (mixed $quantity) {
+    $this->actingAs(User::factory()->create())
+        ->post(route('medications.store'), [
+            'name' => 'Nortriptyline',
+            'dose_amount' => 50,
+            'dose_unit' => 'mg',
+            'frequency' => 'once_daily',
+            'is_prescription' => true,
+            'is_active' => true,
+            'schedules' => [
+                ['time_of_day' => 'night', 'time' => null, 'quantity' => $quantity],
+            ],
+        ])
+        ->assertSessionHasErrors(['schedules.0.quantity']);
+
+    expect(Medication::count())->toBe(0);
+})->with([0, -1, 1.5, 'two', null, 100]);
 
 test('a medication can be declared with multiple doses per day', function () {
     $user = User::factory()->create();
@@ -412,10 +461,34 @@ test('a medication\'s schedule can be edited', function () {
 
     expect($schedules)->toHaveCount(2)
         ->and($schedules[0]->formattedTime())->toBe('08:00')
+        ->and($schedules[0]->quantity)->toBe(1)
         ->and($schedules[0]->position)->toBe(0)
         ->and($schedules[1]->time_of_day)->toBe(TimeOfDay::Bedtime)
         ->and($schedules[1]->position)->toBe(1)
         ->and(MedicationSchedule::count())->toBe(2);
+});
+
+test('changing a dose\'s quantity keeps the existing schedule and its confirmations', function () {
+    $user = User::factory()->create();
+    $medication = Medication::factory()->for($user)->create(['name' => 'Nortriptyline']);
+    $schedule = MedicationSchedule::factory()->for($medication)->during(TimeOfDay::Night)->create();
+
+    $this->actingAs($user)
+        ->patch(route('medications.update', $medication), [
+            'name' => 'Nortriptyline',
+            'dose_amount' => 50,
+            'dose_unit' => 'mg',
+            'frequency' => 'once_daily',
+            'is_prescription' => true,
+            'is_active' => true,
+            'schedules' => [
+                ['time_of_day' => 'night', 'time' => null, 'quantity' => 2],
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(MedicationSchedule::count())->toBe(1)
+        ->and($schedule->fresh()->quantity)->toBe(2);
 });
 
 test('a medication\'s schedule can be cleared', function () {

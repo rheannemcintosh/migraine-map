@@ -23,6 +23,7 @@ class MedicationScheduleFactory extends Factory
             'medication_id' => Medication::factory(),
             'time_of_day' => fake()->randomElement(TimeOfDay::cases()),
             'time' => null,
+            'quantity' => 1,
             'position' => 0,
         ];
     }

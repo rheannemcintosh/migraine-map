@@ -65,7 +65,7 @@ class Medication extends Model
      * Doses that already exist (same time of day or clock time) are kept so
      * their confirmations survive; the rest are removed and new ones created.
      *
-     * @param  array<int, array{time_of_day?: string|null, time?: string|null}>  $doses
+     * @param  array<int, array{time_of_day?: string|null, time?: string|null, quantity?: int|null}>  $doses
      */
     public function syncSchedules(array $doses): void
     {
@@ -75,13 +75,14 @@ class Medication extends Model
         foreach (array_values($doses) as $position => $dose) {
             $timeOfDay = $dose['time_of_day'] ?? null;
             $time = $dose['time'] ?? null;
+            $quantity = $dose['quantity'] ?? 1;
 
             $match = $existing->first(fn (MedicationSchedule $schedule): bool => ! in_array($schedule->id, $kept, true)
                 && $schedule->time_of_day?->value === $timeOfDay
                 && $schedule->formattedTime() === ($time === null ? null : substr($time, 0, 5)));
 
             if ($match !== null) {
-                $match->update(['position' => $position]);
+                $match->update(['quantity' => $quantity, 'position' => $position]);
                 $kept[] = $match->id;
 
                 continue;
@@ -90,6 +91,7 @@ class Medication extends Model
             $created = $this->schedules()->create([
                 'time_of_day' => $timeOfDay,
                 'time' => $time,
+                'quantity' => $quantity,
                 'position' => $position,
             ]);
             $kept[] = $created->id;

@@ -30,6 +30,7 @@ type Schedule = {
     id: number;
     time_of_day: string | null;
     time: string | null;
+    quantity: number;
     label: string;
 };
 
@@ -61,16 +62,23 @@ const props = defineProps<Props>();
 const frequencyLabel = (value: string): string =>
     props.frequencies.find((option) => option.value === value)?.label ?? value;
 
-// A dose is due either during a named period or at a specific clock time.
+// A dose is due either during a named period or at a specific clock time,
+// and is made up of one or more units (e.g. two tablets).
 type ScheduleInput = {
     time_of_day: string | null;
     time: string | null;
+    // `<Input type="number">` makes v-model store a number, or '' when the field is empty.
+    quantity: number | '';
 };
 
 // Sentinel value in the dose `Select` for "a specific clock time".
 const SPECIFIC_TIME = 'time';
 
-const newDose = (): ScheduleInput => ({ time_of_day: 'morning', time: null });
+const newDose = (): ScheduleInput => ({
+    time_of_day: 'morning',
+    time: null,
+    quantity: 1,
+});
 
 const doseKind = (dose: ScheduleInput): string =>
     dose.time_of_day ?? SPECIFIC_TIME;
@@ -156,6 +164,17 @@ const validate = (target: typeof form): boolean => {
                 'Enter a time for this dose.',
             );
         }
+
+        if (
+            dose.quantity === '' ||
+            dose.quantity < 1 ||
+            !Number.isInteger(dose.quantity)
+        ) {
+            target.setError(
+                `schedules.${index}.quantity` as keyof MedicationForm,
+                'Enter how many units make up this dose.',
+            );
+        }
     });
 
     return !target.hasErrors;
@@ -170,6 +189,7 @@ const scheduleError = (
     return (
         errors[`schedules.${index}.time`] ??
         errors[`schedules.${index}.time_of_day`] ??
+        errors[`schedules.${index}.quantity`] ??
         errors[`schedules.${index}`]
     );
 };
@@ -210,6 +230,7 @@ const openEdit = (medication: Medication): void => {
     editForm.schedules = medication.schedules.map((schedule) => ({
         time_of_day: schedule.time_of_day,
         time: schedule.time,
+        quantity: schedule.quantity,
     }));
     editingId.value = medication.id;
 };
@@ -233,6 +254,15 @@ const submitEdit = (): void => {
 
 const formatDose = (medication: Medication): string =>
     `${medication.dose_amount} ${medication.dose_unit}`;
+
+// Prefix the dose with its quantity only when more than one unit is taken.
+const formatScheduledDose = (
+    medication: Medication,
+    schedule: Schedule,
+): string =>
+    schedule.quantity > 1
+        ? `${schedule.quantity} x ${formatDose(medication)}`
+        : formatDose(medication);
 </script>
 
 <template>
@@ -333,6 +363,18 @@ const formatDose = (medication: Medication): string =>
                                             class="size-3"
                                         />
                                         {{ schedule.label }}
+                                        <span
+                                            v-if="schedule.quantity > 1"
+                                            class="text-muted-foreground"
+                                        >
+                                            &middot;
+                                            {{
+                                                formatScheduledDose(
+                                                    medication,
+                                                    schedule,
+                                                )
+                                            }}
+                                        </span>
                                     </Badge>
                                 </li>
                             </ul>
@@ -479,6 +521,16 @@ const formatDose = (medication: Medication): string =>
                                 @update:model-value="dose.time = String($event)"
                                 class="w-32"
                                 :aria-label="`Dose ${index + 1} time`"
+                            />
+                            <Input
+                                v-model="dose.quantity"
+                                type="number"
+                                inputmode="numeric"
+                                min="1"
+                                step="1"
+                                class="w-16"
+                                :aria-label="`Dose ${index + 1} quantity`"
+                                title="Units per dose"
                             />
                             <Button
                                 type="button"
@@ -676,6 +728,16 @@ const formatDose = (medication: Medication): string =>
                                 @update:model-value="dose.time = String($event)"
                                 class="w-32"
                                 :aria-label="`Dose ${index + 1} time`"
+                            />
+                            <Input
+                                v-model="dose.quantity"
+                                type="number"
+                                inputmode="numeric"
+                                min="1"
+                                step="1"
+                                class="w-16"
+                                :aria-label="`Dose ${index + 1} quantity`"
+                                title="Units per dose"
                             />
                             <Button
                                 type="button"
