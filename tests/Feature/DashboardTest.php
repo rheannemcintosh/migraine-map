@@ -36,10 +36,8 @@ test('the dashboard shows today\'s score and medications taken', function () {
 
     $user = User::factory()->create();
     $score = MigraineScore::factory()->for($user)->create(['date' => '2026-06-15', 'score' => 7]);
-    $ibuprofen = Medication::factory()->for($user)->create([
+    $ibuprofen = Medication::factory()->for($user)->withDose(400, DoseUnit::Milligram)->create([
         'name' => 'Ibuprofen',
-        'dose_amount' => 400,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
     ]);
     MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-06-15', 'quantity' => 2]);
@@ -95,10 +93,8 @@ test('the dashboard lists the active ad hoc medications that can be recorded', f
     Carbon::setTestNow('2026-06-15');
 
     $user = User::factory()->create();
-    $ibuprofen = Medication::factory()->for($user)->create([
+    $ibuprofen = Medication::factory()->for($user)->withDose(400, DoseUnit::Milligram)->create([
         'name' => 'Ibuprofen',
-        'dose_amount' => 400,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
     ]);
     Medication::factory()->for($user)->create(['name' => 'Propranolol', 'frequency' => MedicationFrequency::OnceDaily]);

@@ -106,7 +106,7 @@ class CalendarController extends Controller
      * Every scheduled dose due on each day of the year so far, with the id of
      * its confirmation when the user has ticked it off.
      *
-     * @return array<string, array<int, array{scheduleId: int, medicationId: int, name: string, dose: string, label: string, confirmationId: int|null}>>
+     * @return array<string, array<int, array{scheduleId: int, medicationId: int, name: string, dose: string|null, label: string, confirmationId: int|null}>>
      */
     private function scheduledDosesByDay(Request $request, int $year): array
     {

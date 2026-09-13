@@ -31,13 +31,13 @@ import {
 type Medication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
 };
 
 type RecordedMedication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
     quantity: number;
 };
 
@@ -45,7 +45,7 @@ type ScheduledDose = {
     scheduleId: number;
     medicationId: number;
     name: string;
-    dose: string;
+    dose: string | null;
     label: string;
     confirmationId: number | null;
 };
@@ -604,7 +604,10 @@ const formattedSelectedDate = computed(() =>
                             <span
                                 class="text-muted-foreground text-xs font-normal"
                             >
-                                {{ dose.dose }} &middot; {{ dose.label }}
+                                <template v-if="dose.dose !== null">
+                                    {{ dose.dose }} &middot;
+                                </template>
+                                {{ dose.label }}
                             </span>
                         </Label>
                     </li>
@@ -688,7 +691,10 @@ const formattedSelectedDate = computed(() =>
                             <span
                                 class="text-muted-foreground text-xs font-normal"
                             >
-                                {{ dose.dose }} &middot; {{ dose.label }}
+                                <template v-if="dose.dose !== null">
+                                    {{ dose.dose }} &middot;
+                                </template>
+                                {{ dose.label }}
                             </span>
                         </Label>
                     </li>
