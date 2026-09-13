@@ -11,13 +11,13 @@ import { destroy, store, update } from '@/routes/migraine-scores';
 type Medication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
 };
 
 type RecordedMedication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
     quantity: number;
 };
 
@@ -195,7 +195,10 @@ const submit = (): void => {
                         class="flex flex-1 flex-col items-start gap-0"
                     >
                         <span>{{ medication.name }}</span>
-                        <span class="text-muted-foreground text-xs font-normal">
+                        <span
+                            v-if="medication.dose !== null"
+                            class="text-muted-foreground text-xs font-normal"
+                        >
                             {{ medication.dose }}
                         </span>
                     </Label>

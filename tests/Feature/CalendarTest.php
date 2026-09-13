@@ -137,10 +137,8 @@ test('the calendar lists active ad hoc medications and the days medication was t
     Carbon::setTestNow('2026-06-15');
 
     $user = User::factory()->create();
-    $ibuprofen = Medication::factory()->for($user)->create([
+    $ibuprofen = Medication::factory()->for($user)->withDose(400, DoseUnit::Milligram)->create([
         'name' => 'Ibuprofen',
-        'dose_amount' => 400,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
     ]);
     Medication::factory()->for($user)->create(['name' => 'Propranolol', 'frequency' => MedicationFrequency::OnceDaily]);
@@ -277,10 +275,8 @@ test('the calendar exposes score ids and the medications recorded each day', fun
 
     $user = User::factory()->create();
     $score = MigraineScore::factory()->for($user)->create(['date' => '2026-03-10', 'score' => 4]);
-    $ibuprofen = Medication::factory()->for($user)->create([
+    $ibuprofen = Medication::factory()->for($user)->withDose(400, DoseUnit::Milligram)->create([
         'name' => 'Ibuprofen',
-        'dose_amount' => 400,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
     ]);
     MedicationIntake::factory()->for($user)->for($ibuprofen)->create(['date' => '2026-03-10', 'quantity' => 2]);

@@ -4,8 +4,10 @@ use App\Enums\DoseUnit;
 use App\Enums\MedicationFrequency;
 use App\Enums\TimeOfDay;
 use App\Models\Medication;
+use App\Models\MedicationIngredient;
 use App\Models\MedicationSchedule;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
@@ -14,10 +16,8 @@ test('guests are redirected to the login page', function () {
 
 test('the medications page lists only the user\'s medications with the form options', function () {
     $user = User::factory()->create();
-    Medication::factory()->for($user)->create([
+    Medication::factory()->for($user)->withDose(50, DoseUnit::Milligram)->create([
         'name' => 'Sumatriptan',
-        'dose_amount' => 50,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
         'is_prescription' => true,
         'is_active' => true,
@@ -31,8 +31,11 @@ test('the medications page lists only the user\'s medications with the form opti
             ->component('Medications')
             ->has('medications', 1, fn (Assert $medication) => $medication
                 ->where('name', 'Sumatriptan')
-                ->where('dose_amount', 50)
-                ->where('dose_unit', 'mg')
+                ->where('dose', '50 mg')
+                ->has('ingredients', 1)
+                ->where('ingredients.0.name', null)
+                ->where('ingredients.0.dose_amount', 50)
+                ->where('ingredients.0.dose_unit', 'mg')
                 ->where('frequency', 'ad_hoc')
                 ->where('is_prescription', true)
                 ->where('is_active', true)
@@ -59,8 +62,7 @@ test('a medication can be declared', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Anadin Extra',
-            'dose_amount' => 1,
-            'dose_unit' => 'tablet',
+            'ingredients' => [['name' => null, 'dose_amount' => 1, 'dose_unit' => 'tablet']],
             'frequency' => 'ad_hoc',
             'is_prescription' => false,
             'is_active' => true,
@@ -71,13 +73,18 @@ test('a medication can be declared', function () {
     $this->assertDatabaseHas('medications', [
         'user_id' => $user->id,
         'name' => 'Anadin Extra',
-        'dose_unit' => 'tablet',
         'frequency' => 'ad_hoc',
         'is_prescription' => false,
         'is_active' => true,
     ]);
 
-    expect((float) $user->medications()->first()->dose_amount)->toBe(1.0);
+    $medication = $user->medications()->firstOrFail();
+
+    expect($medication->ingredients)->toHaveCount(1)
+        ->and($medication->ingredients[0]->name)->toBeNull()
+        ->and((float) $medication->ingredients[0]->dose_amount)->toBe(1.0)
+        ->and($medication->ingredients[0]->dose_unit)->toBe(DoseUnit::Tablet)
+        ->and($medication->doseLabel())->toBe('1 tablet');
 });
 
 test('a medication can be declared with a decimal dose', function () {
@@ -86,26 +93,24 @@ test('a medication can be declared with a decimal dose', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Rizatriptan',
-            'dose_amount' => 2.5,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 2.5, 'dose_unit' => 'mg']],
             'frequency' => 'twice_daily',
             'is_prescription' => true,
             'is_active' => false,
         ])
         ->assertSessionHasNoErrors();
 
-    expect((float) $user->medications()->first()->dose_amount)->toBe(2.5);
+    expect((float) $user->medications()->firstOrFail()->ingredients->sole()->dose_amount)->toBe(2.5);
 });
 
 test('name and dose are required', function () {
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
-            'dose_unit' => 'mg',
             'frequency' => 'ad_hoc',
             'is_prescription' => false,
             'is_active' => true,
         ])
-        ->assertSessionHasErrors(['name', 'dose_amount']);
+        ->assertSessionHasErrors(['name', 'ingredients']);
 
     expect(Medication::count())->toBe(0);
 });
@@ -114,34 +119,31 @@ test('the dose must be a positive number', function (mixed $dose) {
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => $dose,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => $dose, 'dose_unit' => 'mg']],
             'frequency' => 'ad_hoc',
             'is_prescription' => false,
             'is_active' => true,
         ])
-        ->assertSessionHasErrors('dose_amount');
+        ->assertSessionHasErrors('ingredients.0.dose_amount');
 })->with([0, -1, 'lots']);
 
 test('the dose unit and frequency must be from the preset lists', function () {
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'handful',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'handful']],
             'frequency' => 'whenever',
             'is_prescription' => false,
             'is_active' => true,
         ])
-        ->assertSessionHasErrors(['dose_unit', 'frequency']);
+        ->assertSessionHasErrors(['ingredients.0.dose_unit', 'frequency']);
 });
 
 test('prescription and active flags must be booleans', function () {
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'mg']],
             'frequency' => 'ad_hoc',
             'is_prescription' => 'maybe',
             'is_active' => 'yes',
@@ -151,10 +153,8 @@ test('prescription and active flags must be booleans', function () {
 
 test('a medication can be edited from the medication page', function () {
     $user = User::factory()->create();
-    $medication = Medication::factory()->for($user)->create([
+    $medication = Medication::factory()->for($user)->withDose(50, DoseUnit::Milligram)->create([
         'name' => 'Sumatriptan',
-        'dose_amount' => 50,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::AdHoc,
         'is_prescription' => true,
         'is_active' => true,
@@ -163,8 +163,7 @@ test('a medication can be edited from the medication page', function () {
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Sumatriptan',
-            'dose_amount' => 100,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 100, 'dose_unit' => 'mg']],
             'frequency' => 'twice_daily',
             'is_prescription' => true,
             'is_active' => false,
@@ -174,7 +173,7 @@ test('a medication can be edited from the medication page', function () {
 
     $medication->refresh();
 
-    expect((float) $medication->dose_amount)->toBe(100.0)
+    expect((float) $medication->ingredients->sole()->dose_amount)->toBe(100.0)
         ->and($medication->frequency)->toBe(MedicationFrequency::TwiceDaily)
         ->and($medication->is_active)->toBeFalse();
 });
@@ -186,13 +185,12 @@ test('a medication edit is validated', function () {
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => '',
-            'dose_amount' => 0,
-            'dose_unit' => 'handful',
+            'ingredients' => [['name' => null, 'dose_amount' => 0, 'dose_unit' => 'handful']],
             'frequency' => 'whenever',
             'is_prescription' => false,
             'is_active' => true,
         ])
-        ->assertSessionHasErrors(['name', 'dose_amount', 'dose_unit', 'frequency']);
+        ->assertSessionHasErrors(['name', 'ingredients.0.dose_amount', 'ingredients.0.dose_unit', 'frequency']);
 
     expect($medication->fresh()->name)->toBe('Sumatriptan');
 });
@@ -203,8 +201,7 @@ test('a user cannot edit another user\'s medication', function () {
     $this->actingAs(User::factory()->create())
         ->patch(route('medications.update', $medication), [
             'name' => 'Mine now',
-            'dose_amount' => 1,
-            'dose_unit' => 'tablet',
+            'ingredients' => [['name' => null, 'dose_amount' => 1, 'dose_unit' => 'tablet']],
             'frequency' => 'ad_hoc',
             'is_prescription' => false,
             'is_active' => true,
@@ -266,8 +263,7 @@ test('a medication can be declared with a single night-time dose', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Amitriptyline',
-            'dose_amount' => 10,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 10, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -293,8 +289,7 @@ test('a scheduled dose can be made up of more than one unit', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Nortriptyline',
-            'dose_amount' => 50,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 50, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -320,8 +315,7 @@ test('a scheduled dose quantity must be a positive whole number', function (mixe
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Nortriptyline',
-            'dose_amount' => 50,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 50, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -340,8 +334,7 @@ test('a medication can be declared with multiple doses per day', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Propranolol',
-            'dose_amount' => 40,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 40, 'dose_unit' => 'mg']],
             'frequency' => 'three_times_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -369,8 +362,7 @@ test('a medication can be declared without a schedule', function () {
     $this->actingAs($user)
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'mg']],
             'frequency' => 'ad_hoc',
             'is_prescription' => false,
             'is_active' => true,
@@ -385,8 +377,7 @@ test('each scheduled dose needs a time of day or a specific time', function () {
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => false,
             'is_active' => true,
@@ -403,8 +394,7 @@ test('a scheduled dose cannot have both a time of day and a specific time', func
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => false,
             'is_active' => true,
@@ -421,8 +411,7 @@ test('scheduled doses are validated against the preset periods and time format',
     $this->actingAs(User::factory()->create())
         ->post(route('medications.store'), [
             'name' => 'Ibuprofen',
-            'dose_amount' => 400,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 400, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => false,
             'is_active' => true,
@@ -444,8 +433,7 @@ test('a medication\'s schedule can be edited', function () {
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Propranolol',
-            'dose_amount' => 40,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 40, 'dose_unit' => 'mg']],
             'frequency' => 'twice_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -476,8 +464,7 @@ test('changing a dose\'s quantity keeps the existing schedule and its confirmati
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Nortriptyline',
-            'dose_amount' => 50,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 50, 'dose_unit' => 'mg']],
             'frequency' => 'once_daily',
             'is_prescription' => true,
             'is_active' => true,
@@ -499,8 +486,7 @@ test('a medication\'s schedule can be cleared', function () {
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Propranolol',
-            'dose_amount' => 40,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 40, 'dose_unit' => 'mg']],
             'frequency' => 'ad_hoc',
             'is_prescription' => true,
             'is_active' => true,
@@ -519,8 +505,7 @@ test('an invalid schedule edit leaves the existing schedule untouched', function
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Propranolol',
-            'dose_amount' => 40,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 40, 'dose_unit' => 'mg']],
             'frequency' => 'ad_hoc',
             'is_prescription' => true,
             'is_active' => true,
@@ -534,4 +519,110 @@ test('an invalid schedule edit leaves the existing schedule untouched', function
 
     expect($schedules)->toHaveCount(1)
         ->and($schedules[0]->time_of_day)->toBe(TimeOfDay::Night);
+});
+
+test('a compound medication can be declared with several named ingredients', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('medications.store'), [
+            'name' => 'Anadin Extra',
+            'ingredients' => [
+                ['name' => 'Aspirin', 'dose_amount' => 300, 'dose_unit' => 'mg'],
+                ['name' => 'Paracetamol', 'dose_amount' => 200, 'dose_unit' => 'mg'],
+                ['name' => 'Caffeine', 'dose_amount' => 45, 'dose_unit' => 'mg'],
+            ],
+            'frequency' => 'ad_hoc',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('medications'));
+
+    $medication = $user->medications()->firstOrFail();
+
+    expect($medication->ingredients->pluck('name')->all())->toBe(['Aspirin', 'Paracetamol', 'Caffeine'])
+        ->and($medication->ingredients->pluck('position')->all())->toBe([0, 1, 2])
+        ->and($medication->isCompound())->toBeTrue()
+        ->and($medication->ingredientsLabel())->toBe('Aspirin 300 mg, Paracetamol 200 mg, Caffeine 45 mg')
+        ->and($medication->doseLabel())->toBeNull();
+
+    $this->actingAs($user)
+        ->get(route('medications'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('medications.0.dose', 'Aspirin 300 mg, Paracetamol 200 mg, Caffeine 45 mg')
+            ->has('medications.0.ingredients', 3)
+            ->where('medications.0.ingredients.1.name', 'Paracetamol')
+            ->where('medications.0.ingredients.1.dose_amount', 200)
+        );
+});
+
+test('every ingredient of a compound medication must be named', function () {
+    $this->actingAs(User::factory()->create())
+        ->post(route('medications.store'), [
+            'name' => 'Anadin Extra',
+            'ingredients' => [
+                ['name' => 'Aspirin', 'dose_amount' => 300, 'dose_unit' => 'mg'],
+                ['name' => null, 'dose_amount' => 200, 'dose_unit' => 'mg'],
+            ],
+            'frequency' => 'ad_hoc',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['ingredients.1.name'])
+        ->assertSessionDoesntHaveErrors(['ingredients.0.name']);
+
+    expect(Medication::count())->toBe(0);
+});
+
+test('at least one ingredient is required', function () {
+    $this->actingAs(User::factory()->create())
+        ->post(route('medications.store'), [
+            'name' => 'Ibuprofen',
+            'ingredients' => [],
+            'frequency' => 'ad_hoc',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['ingredients']);
+
+    expect(Medication::count())->toBe(0);
+});
+
+test('a medication\'s ingredients can be edited', function () {
+    $user = User::factory()->create();
+    $medication = Medication::factory()->for($user)->withDose(1, DoseUnit::Tablet)->create(['name' => 'Anadin Extra']);
+
+    $this->actingAs($user)
+        ->patch(route('medications.update', $medication), [
+            'name' => 'Anadin Extra',
+            'ingredients' => [
+                ['name' => 'Aspirin', 'dose_amount' => 300, 'dose_unit' => 'mg'],
+                ['name' => 'Caffeine', 'dose_amount' => 45, 'dose_unit' => 'mg'],
+            ],
+            'frequency' => 'ad_hoc',
+            'is_prescription' => false,
+            'is_active' => true,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($medication->fresh()->ingredientsLabel())->toBe('Aspirin 300 mg, Caffeine 45 mg')
+        ->and(MedicationIngredient::count())->toBe(2);
+});
+
+test('a compound medication shows only its name and quantity on the calendar', function () {
+    Carbon::setTestNow('2026-01-02');
+    $user = User::factory()->create();
+    $medication = Medication::factory()->for($user)->withIngredients([
+        ['name' => 'Lidocaine', 'dose_amount' => 4, 'dose_unit' => DoseUnit::Milligram],
+        ['name' => 'Steroid', 'dose_amount' => 10, 'dose_unit' => DoseUnit::Milligram],
+    ])->create(['name' => 'Nerve Block', 'frequency' => MedicationFrequency::OnceDaily, 'created_at' => '2026-01-01']);
+    MedicationSchedule::factory()->for($medication)->during(TimeOfDay::Morning)->create(['quantity' => 2, 'created_at' => '2026-01-01']);
+
+    $this->actingAs($user)
+        ->get(route('calendar'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('scheduledDosesByDay.2026-01-01.0.name', 'Nerve Block')
+            ->where('scheduledDosesByDay.2026-01-01.0.dose', '2 x')
+        );
 });

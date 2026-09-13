@@ -78,13 +78,18 @@ class MedicationSchedule extends Model
 
     /**
      * The dose as displayed to the user, prefixed with the quantity when more
-     * than one unit is taken, e.g. "2 x 50 mg" or "50 mg".
+     * than one unit is taken, e.g. "2 x 50 mg" or "50 mg". A compound
+     * medication has no single dose, so only the quantity is shown, if any.
      */
-    public function doseLabel(): string
+    public function doseLabel(): ?string
     {
         $dose = $this->medication->doseLabel();
 
-        return $this->quantity > 1 ? $this->quantity.' x '.$dose : $dose;
+        if ($this->quantity <= 1) {
+            return $dose;
+        }
+
+        return $dose === null ? $this->quantity.' x' : $this->quantity.' x '.$dose;
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\DoseUnit;
 use App\Enums\MedicationFrequency;
 use Database\Factories\MedicationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -17,28 +16,44 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $name
- * @property string $dose_amount
- * @property DoseUnit $dose_unit
  * @property MedicationFrequency $frequency
  * @property bool $is_prescription
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
+ * @property-read Collection<int, MedicationIngredient> $ingredients
  * @property-read Collection<int, MedicationSchedule> $schedules
  */
-#[Fillable(['name', 'dose_amount', 'dose_unit', 'frequency', 'is_prescription', 'is_active'])]
+#[Fillable(['name', 'frequency', 'is_prescription', 'is_active'])]
 class Medication extends Model
 {
     /** @use HasFactory<MedicationFactory> */
     use HasFactory;
 
     /**
-     * The dose as displayed to the user, e.g. "400 mg".
+     * Whether the medication is made up of more than one active ingredient.
      */
-    public function doseLabel(): string
+    public function isCompound(): bool
     {
-        return (float) $this->dose_amount.' '.$this->dose_unit->value;
+        return $this->ingredients->count() > 1;
+    }
+
+    /**
+     * The dose of a single-ingredient medication, e.g. "400 mg". Null for a
+     * compound medication, whose ingredients are only listed in full.
+     */
+    public function doseLabel(): ?string
+    {
+        return $this->isCompound() ? null : $this->ingredients->first()?->doseLabel();
+    }
+
+    /**
+     * Every ingredient with its dose, e.g. "Aspirin 300 mg, Paracetamol 200 mg".
+     */
+    public function ingredientsLabel(): string
+    {
+        return $this->ingredients->map(fn (MedicationIngredient $ingredient): string => $ingredient->label())->implode(', ');
     }
 
     /**
@@ -47,6 +62,37 @@ class Medication extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The active ingredients, in the order the user entered them.
+     *
+     * @return HasMany<MedicationIngredient, $this>
+     */
+    public function ingredients(): HasMany
+    {
+        return $this->hasMany(MedicationIngredient::class)->orderBy('position');
+    }
+
+    /**
+     * Replace the ingredients with the given list.
+     *
+     * @param  array<int, array{name?: string|null, dose_amount: float|int|string, dose_unit: string}>  $ingredients
+     */
+    public function syncIngredients(array $ingredients): void
+    {
+        $this->ingredients()->delete();
+
+        foreach (array_values($ingredients) as $position => $ingredient) {
+            $this->ingredients()->create([
+                'name' => count($ingredients) > 1 ? ($ingredient['name'] ?? null) : null,
+                'dose_amount' => $ingredient['dose_amount'],
+                'dose_unit' => $ingredient['dose_unit'],
+                'position' => $position,
+            ]);
+        }
+
+        $this->unsetRelation('ingredients');
     }
 
     /**
@@ -108,8 +154,6 @@ class Medication extends Model
     protected function casts(): array
     {
         return [
-            'dose_amount' => 'decimal:3',
-            'dose_unit' => DoseUnit::class,
             'frequency' => MedicationFrequency::class,
             'is_prescription' => 'boolean',
             'is_active' => 'boolean',
