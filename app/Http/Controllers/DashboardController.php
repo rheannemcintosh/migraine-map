@@ -28,7 +28,7 @@ class DashboardController extends Controller
         $medicationsTaken = $request->user()
             ->medicationIntakes()
             ->whereDate('date', $today)
-            ->with('medication')
+            ->with('medication.ingredients')
             ->get()
             ->map(fn (MedicationIntake $intake): array => [
                 'id' => (int) $intake->medication_id,
