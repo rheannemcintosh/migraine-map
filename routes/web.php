@@ -4,6 +4,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicationConfirmationController;
 use App\Http\Controllers\MedicationController;
+use App\Http\Controllers\MigraineExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -24,6 +25,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('medication-confirmations.store');
     Route::delete('medication-confirmations/{medicationConfirmation}', [MedicationConfirmationController::class, 'destroy'])
         ->name('medication-confirmations.destroy');
+
+    Route::get('medications/exports', [MigraineExportController::class, 'index'])
+        ->name('medication-exports');
+    Route::post('medications/exports', [MigraineExportController::class, 'store'])
+        ->name('medication-exports.store');
+    Route::get('medications/exports/{migraineExport}/download', [MigraineExportController::class, 'download'])
+        ->name('medication-exports.download');
 
     Route::get('medications', [MedicationController::class, 'index'])
         ->name('medications');

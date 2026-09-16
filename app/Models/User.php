@@ -32,6 +32,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property-read Collection<int, Medication> $medications
  * @property-read Collection<int, MedicationIntake> $medicationIntakes
  * @property-read Collection<int, MedicationScheduleConfirmation> $medicationScheduleConfirmations
+ * @property-read Collection<int, MigraineExport> $migraineExports
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -70,6 +71,14 @@ class User extends Authenticatable implements PasskeyUser
     public function medicationScheduleConfirmations(): HasMany
     {
         return $this->hasMany(MedicationScheduleConfirmation::class);
+    }
+
+    /**
+     * @return HasMany<MigraineExport, $this>
+     */
+    public function migraineExports(): HasMany
+    {
+        return $this->hasMany(MigraineExport::class);
     }
 
     /**
