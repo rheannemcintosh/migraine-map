@@ -3,6 +3,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import { Clock, Pencil, Pill, Plus, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
+import MedicationTabs from '@/components/MedicationTabs.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -337,6 +338,8 @@ const formatScheduledDose = (
     <Head title="Medications" />
 
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
+        <MedicationTabs />
+
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Medications</h1>
 
