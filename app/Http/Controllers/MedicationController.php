@@ -8,6 +8,7 @@ use App\Enums\TimeOfDay;
 use App\Http\Requests\StoreMedicationRequest;
 use App\Http\Requests\UpdateMedicationRequest;
 use App\Models\Medication;
+use App\Models\MedicationIngredient;
 use App\Models\MedicationSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,14 +25,22 @@ class MedicationController extends Controller
     {
         $medications = $request->user()
             ->medications()
-            ->with('schedules')
+            ->with(['ingredients', 'schedules'])
             ->orderBy('name')
             ->get()
             ->map(fn (Medication $medication): array => [
                 'id' => $medication->id,
                 'name' => $medication->name,
-                'dose_amount' => (float) $medication->dose_amount,
-                'dose_unit' => $medication->dose_unit->value,
+                'dose' => $medication->ingredientsLabel(),
+                'ingredients' => $medication->ingredients
+                    ->map(fn (MedicationIngredient $ingredient): array => [
+                        'id' => $ingredient->id,
+                        'name' => $ingredient->name,
+                        'dose_amount' => (float) $ingredient->dose_amount,
+                        'dose_unit' => $ingredient->dose_unit->value,
+                    ])
+                    ->values()
+                    ->all(),
                 'frequency' => $medication->frequency->value,
                 'is_prescription' => $medication->is_prescription,
                 'is_active' => $medication->is_active,
@@ -61,8 +70,9 @@ class MedicationController extends Controller
     public function store(StoreMedicationRequest $request): RedirectResponse
     {
         DB::transaction(function () use ($request): void {
-            $medication = $request->user()->medications()->create($request->safe()->except('schedules'));
+            $medication = $request->user()->medications()->create($request->safe()->except(['ingredients', 'schedules']));
 
+            $medication->syncIngredients($request->validated('ingredients'));
             $medication->syncSchedules($request->validated('schedules', []));
         });
 
@@ -77,7 +87,9 @@ class MedicationController extends Controller
     public function update(UpdateMedicationRequest $request, Medication $medication): RedirectResponse
     {
         DB::transaction(function () use ($request, $medication): void {
-            $medication->update($request->safe()->except('schedules'));
+            $medication->update($request->safe()->except(['ingredients', 'schedules']));
+
+            $medication->syncIngredients($request->validated('ingredients'));
 
             if ($request->has('schedules')) {
                 $medication->syncSchedules($request->validated('schedules'));

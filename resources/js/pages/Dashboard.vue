@@ -15,13 +15,13 @@ import { dashboard } from '@/routes';
 type Medication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
 };
 
 type RecordedMedication = {
     id: number;
     name: string;
-    dose: string;
+    dose: string | null;
     quantity: number;
 };
 

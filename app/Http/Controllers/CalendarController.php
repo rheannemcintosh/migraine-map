@@ -49,7 +49,7 @@ class CalendarController extends Controller
         $intakesByDay = $request->user()
             ->medicationIntakes()
             ->whereYear('date', $year)
-            ->with('medication')
+            ->with('medication.ingredients')
             ->get()
             ->groupBy(fn (MedicationIntake $intake): string => $intake->date->toDateString());
 
@@ -106,7 +106,7 @@ class CalendarController extends Controller
      * Every scheduled dose due on each day of the year so far, with the id of
      * its confirmation when the user has ticked it off.
      *
-     * @return array<string, array<int, array{scheduleId: int, medicationId: int, name: string, dose: string, label: string, confirmationId: int|null}>>
+     * @return array<string, array<int, array{scheduleId: int, medicationId: int, name: string, dose: string|null, label: string, confirmationId: int|null}>>
      */
     private function scheduledDosesByDay(Request $request, int $year): array
     {
@@ -114,7 +114,7 @@ class CalendarController extends Controller
 
         $schedules = MedicationSchedule::query()
             ->whereHas('medication', fn ($query) => $query->where('user_id', $user->id)->where('is_active', true))
-            ->with('medication')
+            ->with('medication.ingredients')
             ->get()
             ->sortBy([
                 fn (MedicationSchedule $a, MedicationSchedule $b): int => strcmp($a->medication->name, $b->medication->name),

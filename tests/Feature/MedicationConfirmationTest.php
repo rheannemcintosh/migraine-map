@@ -17,10 +17,8 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 function scheduledMedication(User $user, string $since = '2026-01-01'): array
 {
-    $medication = Medication::factory()->for($user)->create([
+    $medication = Medication::factory()->for($user)->withDose(40, DoseUnit::Milligram)->create([
         'name' => 'Propranolol',
-        'dose_amount' => 40,
-        'dose_unit' => DoseUnit::Milligram,
         'frequency' => MedicationFrequency::TwiceDaily,
         'created_at' => $since,
     ]);
@@ -262,8 +260,7 @@ test('editing a medication keeps the confirmations of unchanged doses', function
     $this->actingAs($user)
         ->patch(route('medications.update', $medication), [
             'name' => 'Propranolol',
-            'dose_amount' => 40,
-            'dose_unit' => 'mg',
+            'ingredients' => [['name' => null, 'dose_amount' => 40, 'dose_unit' => 'mg']],
             'frequency' => 'twice_daily',
             'is_prescription' => true,
             'is_active' => true,

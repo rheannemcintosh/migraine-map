@@ -34,11 +34,19 @@ type Schedule = {
     label: string;
 };
 
+type Ingredient = {
+    id: number;
+    name: string | null;
+    dose_amount: number;
+    dose_unit: string;
+};
+
 type Medication = {
     id: number;
     name: string;
-    dose_amount: number;
-    dose_unit: string;
+    // Every ingredient with its dose, e.g. "Aspirin 300 mg, Caffeine 45 mg".
+    dose: string;
+    ingredients: Ingredient[];
     frequency: string;
     is_prescription: boolean;
     is_active: boolean;
@@ -93,11 +101,24 @@ const setDoseKind = (dose: ScheduleInput, kind: string): void => {
     }
 };
 
-type MedicationForm = {
+// An active ingredient and its dose. A single-ingredient medication leaves
+// the name empty; compound medications name each ingredient.
+type IngredientInput = {
     name: string;
     // `<Input type="number">` makes v-model store a number, or '' when the field is empty.
     dose_amount: number | '';
     dose_unit: string;
+};
+
+const newIngredient = (): IngredientInput => ({
+    name: '',
+    dose_amount: '',
+    dose_unit: 'mg',
+});
+
+type MedicationForm = {
+    name: string;
+    ingredients: IngredientInput[];
     frequency: string;
     is_prescription: boolean;
     is_active: boolean;
@@ -106,8 +127,7 @@ type MedicationForm = {
 
 const emptyForm = (): MedicationForm => ({
     name: '',
-    dose_amount: '',
-    dose_unit: 'mg',
+    ingredients: [newIngredient()],
     frequency: 'ad_hoc',
     is_prescription: false,
     is_active: true,
@@ -148,14 +168,28 @@ const validate = (target: typeof form): boolean => {
         target.setError('name', 'The name field is required.');
     }
 
-    if (target.dose_amount === '') {
-        target.setError('dose_amount', 'The dose amount field is required.');
-    } else if (target.dose_amount <= 0) {
-        target.setError(
-            'dose_amount',
-            'The dose amount field must be greater than 0.',
-        );
-    }
+    const isCompound = target.ingredients.length > 1;
+
+    target.ingredients.forEach((ingredient, index) => {
+        if (isCompound && ingredient.name.trim() === '') {
+            target.setError(
+                `ingredients.${index}.name` as keyof MedicationForm,
+                'Enter a name for this ingredient.',
+            );
+        }
+
+        if (ingredient.dose_amount === '') {
+            target.setError(
+                `ingredients.${index}.dose_amount` as keyof MedicationForm,
+                'The dose amount field is required.',
+            );
+        } else if (ingredient.dose_amount <= 0) {
+            target.setError(
+                `ingredients.${index}.dose_amount` as keyof MedicationForm,
+                'The dose amount field must be greater than 0.',
+            );
+        }
+    });
 
     target.schedules.forEach((dose, index) => {
         if (dose.time_of_day === null && (dose.time ?? '') === '') {
@@ -178,6 +212,34 @@ const validate = (target: typeof form): boolean => {
     });
 
     return !target.hasErrors;
+};
+
+const ingredientError = (
+    target: typeof form,
+    index: number,
+): string | undefined => {
+    const errors = target.errors as Record<string, string | undefined>;
+
+    return (
+        errors[`ingredients.${index}.name`] ??
+        errors[`ingredients.${index}.dose_amount`] ??
+        errors[`ingredients.${index}.dose_unit`] ??
+        errors[`ingredients.${index}`]
+    );
+};
+
+const addIngredient = (target: typeof form): void => {
+    target.ingredients.push(newIngredient());
+};
+
+// Removing down to a single ingredient turns the medication back into a
+// simple one, whose only ingredient is unnamed.
+const removeIngredient = (target: typeof form, index: number): void => {
+    target.ingredients.splice(index, 1);
+
+    if (target.ingredients.length === 1) {
+        target.ingredients[0].name = '';
+    }
 };
 
 const scheduleError = (
@@ -222,8 +284,11 @@ const openEdit = (medication: Medication): void => {
     editForm.reset();
     editForm.clearErrors();
     editForm.name = medication.name;
-    editForm.dose_amount = medication.dose_amount;
-    editForm.dose_unit = medication.dose_unit;
+    editForm.ingredients = medication.ingredients.map((ingredient) => ({
+        name: ingredient.name ?? '',
+        dose_amount: ingredient.dose_amount,
+        dose_unit: ingredient.dose_unit,
+    }));
     editForm.frequency = medication.frequency;
     editForm.is_prescription = medication.is_prescription;
     editForm.is_active = medication.is_active;
@@ -252,17 +317,20 @@ const submitEdit = (): void => {
     });
 };
 
-const formatDose = (medication: Medication): string =>
-    `${medication.dose_amount} ${medication.dose_unit}`;
-
 // Prefix the dose with its quantity only when more than one unit is taken.
+// A compound medication has no single dose, so only the quantity is shown.
 const formatScheduledDose = (
     medication: Medication,
     schedule: Schedule,
-): string =>
-    schedule.quantity > 1
-        ? `${schedule.quantity} x ${formatDose(medication)}`
-        : formatDose(medication);
+): string => {
+    if (schedule.quantity <= 1) {
+        return medication.dose;
+    }
+
+    return medication.ingredients.length > 1
+        ? `${schedule.quantity} x`
+        : `${schedule.quantity} x ${medication.dose}`;
+};
 </script>
 
 <template>
@@ -325,9 +393,15 @@ const formatScheduledDose = (
                 </div>
                 <dl class="text-muted-foreground grid gap-1 text-sm">
                     <div class="flex justify-between gap-2">
-                        <dt>Dose</dt>
-                        <dd class="text-foreground">
-                            {{ formatDose(medication) }}
+                        <dt>
+                            {{
+                                medication.ingredients.length > 1
+                                    ? 'Ingredients'
+                                    : 'Dose'
+                            }}
+                        </dt>
+                        <dd class="text-foreground text-right">
+                            {{ medication.dose }}
                         </dd>
                     </div>
                     <div class="flex justify-between gap-2">
@@ -390,8 +464,8 @@ const formatScheduledDose = (
             <DialogHeader>
                 <DialogTitle>Add medication</DialogTitle>
                 <DialogDescription>
-                    Record a medication you take. Combination medicines are
-                    recorded as one medication with a single dose.
+                    Record a medication you take. For combination medicines, add
+                    each active ingredient with its own dose.
                 </DialogDescription>
             </DialogHeader>
 
@@ -408,38 +482,78 @@ const formatScheduledDose = (
                     <InputError :message="form.errors.name" />
                 </div>
 
-                <div class="grid grid-cols-2 items-start gap-4">
-                    <div class="grid content-start gap-2">
-                        <Label for="dose_amount">Dose</Label>
-                        <Input
-                            id="dose_amount"
-                            v-model="form.dose_amount"
-                            type="number"
-                            inputmode="decimal"
-                            step="any"
-                            placeholder="e.g. 50"
-                        />
-                        <InputError :message="form.errors.dose_amount" />
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label>{{
+                            form.ingredients.length > 1 ? 'Ingredients' : 'Dose'
+                        }}</Label>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="cursor-pointer"
+                            @click="addIngredient(form)"
+                        >
+                            <Plus />
+                            Add ingredient
+                        </Button>
                     </div>
-
-                    <div class="grid content-start gap-2">
-                        <Label for="dose_unit">Unit</Label>
-                        <Select v-model="form.dose_unit">
-                            <SelectTrigger id="dose_unit" class="w-full">
-                                <SelectValue placeholder="Select a unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="unit in doseUnits"
-                                    :key="unit"
-                                    :value="unit"
+                    <div
+                        v-for="(ingredient, index) in form.ingredients"
+                        :key="index"
+                        class="grid gap-1"
+                    >
+                        <div class="flex items-start gap-2">
+                            <Input
+                                v-if="form.ingredients.length > 1"
+                                v-model="ingredient.name"
+                                type="text"
+                                class="flex-1"
+                                placeholder="e.g. Paracetamol"
+                                :aria-label="`Ingredient ${index + 1} name`"
+                            />
+                            <Input
+                                :id="`ingredient-${index}-dose_amount`"
+                                v-model="ingredient.dose_amount"
+                                type="number"
+                                inputmode="decimal"
+                                step="any"
+                                class="w-24"
+                                placeholder="e.g. 50"
+                                :aria-label="`Ingredient ${index + 1} dose amount`"
+                            />
+                            <Select v-model="ingredient.dose_unit">
+                                <SelectTrigger
+                                    class="w-28"
+                                    :aria-label="`Ingredient ${index + 1} dose unit`"
                                 >
-                                    {{ unit }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <InputError :message="form.errors.dose_unit" />
+                                    <SelectValue placeholder="Unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="unit in doseUnits"
+                                        :key="unit"
+                                        :value="unit"
+                                    >
+                                        {{ unit }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Button
+                                v-if="form.ingredients.length > 1"
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                class="size-8 shrink-0 cursor-pointer"
+                                :aria-label="`Remove ingredient ${index + 1}`"
+                                @click="removeIngredient(form, index)"
+                            >
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                        <InputError :message="ingredientError(form, index)" />
                     </div>
+                    <InputError :message="form.errors.ingredients" />
                 </div>
 
                 <div class="grid gap-2">
@@ -615,38 +729,82 @@ const formatScheduledDose = (
                     <InputError :message="editForm.errors.name" />
                 </div>
 
-                <div class="grid grid-cols-2 items-start gap-4">
-                    <div class="grid content-start gap-2">
-                        <Label for="edit-dose_amount">Dose</Label>
-                        <Input
-                            id="edit-dose_amount"
-                            v-model="editForm.dose_amount"
-                            type="number"
-                            inputmode="decimal"
-                            step="any"
-                            placeholder="e.g. 50"
-                        />
-                        <InputError :message="editForm.errors.dose_amount" />
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label>{{
+                            editForm.ingredients.length > 1
+                                ? 'Ingredients'
+                                : 'Dose'
+                        }}</Label>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="cursor-pointer"
+                            @click="addIngredient(editForm)"
+                        >
+                            <Plus />
+                            Add ingredient
+                        </Button>
                     </div>
-
-                    <div class="grid content-start gap-2">
-                        <Label for="edit-dose_unit">Unit</Label>
-                        <Select v-model="editForm.dose_unit">
-                            <SelectTrigger id="edit-dose_unit" class="w-full">
-                                <SelectValue placeholder="Select a unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="unit in doseUnits"
-                                    :key="unit"
-                                    :value="unit"
+                    <div
+                        v-for="(ingredient, index) in editForm.ingredients"
+                        :key="index"
+                        class="grid gap-1"
+                    >
+                        <div class="flex items-start gap-2">
+                            <Input
+                                v-if="editForm.ingredients.length > 1"
+                                v-model="ingredient.name"
+                                type="text"
+                                class="flex-1"
+                                placeholder="e.g. Paracetamol"
+                                :aria-label="`Ingredient ${index + 1} name`"
+                            />
+                            <Input
+                                :id="`edit-ingredient-${index}-dose_amount`"
+                                v-model="ingredient.dose_amount"
+                                type="number"
+                                inputmode="decimal"
+                                step="any"
+                                class="w-24"
+                                placeholder="e.g. 50"
+                                :aria-label="`Ingredient ${index + 1} dose amount`"
+                            />
+                            <Select v-model="ingredient.dose_unit">
+                                <SelectTrigger
+                                    class="w-28"
+                                    :aria-label="`Ingredient ${index + 1} dose unit`"
                                 >
-                                    {{ unit }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <InputError :message="editForm.errors.dose_unit" />
+                                    <SelectValue placeholder="Unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="unit in doseUnits"
+                                        :key="unit"
+                                        :value="unit"
+                                    >
+                                        {{ unit }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Button
+                                v-if="editForm.ingredients.length > 1"
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                class="size-8 shrink-0 cursor-pointer"
+                                :aria-label="`Remove ingredient ${index + 1}`"
+                                @click="removeIngredient(editForm, index)"
+                            >
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                        <InputError
+                            :message="ingredientError(editForm, index)"
+                        />
                     </div>
+                    <InputError :message="editForm.errors.ingredients" />
                 </div>
 
                 <div class="grid gap-2">
