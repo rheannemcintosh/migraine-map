@@ -3,7 +3,6 @@ import { Head, useForm } from '@inertiajs/vue3';
 import { Download, FileDown, Plus } from '@lucide/vue';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
-import MedicationTabs from '@/components/MedicationTabs.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -163,8 +162,6 @@ const includes = (item: Export): string[] => {
     <Head title="Export" />
 
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
-        <MedicationTabs />
-
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Export</h1>
 
