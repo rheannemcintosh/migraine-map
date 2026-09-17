@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
-    bodyRegions,
     figureOrigins,
+    findRegion,
     headOutline,
+    profileHeadOutline,
+    profileTorsoOutline,
+    regionShapes,
     torsoOutline,
+    viewLabels,
     type BodyRegionId,
+    type BodyView,
     type RegionSelection,
 } from '@/lib/bodyRegions';
 
@@ -20,13 +25,29 @@ const emit = defineEmits<{
     toggle: [id: BodyRegionId];
 }>();
 
-const frontRegions = computed(() =>
-    bodyRegions.filter((region) => region.view === 'front'),
+const hovered = ref<BodyRegionId | null>(null);
+
+const hoveredRegion = computed(() =>
+    hovered.value === null ? null : findRegion(hovered.value),
 );
 
-const backRegions = computed(() =>
-    bodyRegions.filter((region) => region.view === 'back'),
-);
+const views = Object.keys(figureOrigins) as BodyView[];
+
+const isProfile = (view: BodyView): boolean => view.endsWith('-profile');
+
+// Side markers show which anatomical side each edge of a figure is.
+const edgeMarkers = (view: BodyView): [string, string] => {
+    switch (view) {
+        case 'front':
+            return ['R', 'L'];
+        case 'back':
+            return ['L', 'R'];
+        case 'left-profile':
+            return ['Front', 'Back'];
+        case 'right-profile':
+            return ['Back', 'Front'];
+    }
+};
 
 const selectionFor = (id: BodyRegionId): RegionSelection => {
     if (props.primary === id) {
@@ -59,86 +80,112 @@ const onKeydown = (event: KeyboardEvent, id: BodyRegionId): void => {
 </script>
 
 <template>
-    <svg
-        viewBox="0 0 480 280"
-        role="group"
-        aria-label="Body map"
-        class="h-auto w-full max-w-xl select-none"
-    >
-        <!-- Silhouette outlines give the regions context without being interactive. -->
-        <g
-            class="stroke-foreground/20 fill-none stroke-[1.5]"
-            aria-hidden="true"
+    <div class="flex w-full max-w-xl flex-col items-center gap-2">
+        <svg
+            viewBox="0 0 480 540"
+            role="group"
+            aria-label="Body map"
+            class="h-auto w-full select-none"
         >
+            <!-- Silhouette outlines give the regions context without being interactive. -->
             <g
-                v-for="(originX, view) in figureOrigins"
-                :key="view"
-                :transform="`translate(${originX} 0)`"
+                class="stroke-foreground/20 fill-none stroke-[1.5]"
+                aria-hidden="true"
             >
-                <ellipse v-bind="headOutline" />
-                <path :d="torsoOutline" />
-                <line
-                    x1="0"
-                    y1="44"
-                    x2="0"
-                    y2="250"
-                    class="stroke-foreground/10"
-                    stroke-dasharray="3 3"
-                />
-                <text
-                    x="-108"
-                    y="120"
-                    text-anchor="middle"
-                    class="fill-muted-foreground stroke-none text-[10px]"
+                <g
+                    v-for="view in views"
+                    :key="view"
+                    :transform="`translate(${figureOrigins[view].x} ${figureOrigins[view].y})`"
                 >
-                    {{ view === 'front' ? 'R' : 'L' }}
-                </text>
-                <text
-                    x="108"
-                    y="120"
-                    text-anchor="middle"
-                    class="fill-muted-foreground stroke-none text-[10px]"
-                >
-                    {{ view === 'front' ? 'L' : 'R' }}
-                </text>
+                    <template v-if="isProfile(view)">
+                        <g
+                            :transform="
+                                view === 'right-profile' ? 'scale(-1 1)' : ''
+                            "
+                        >
+                            <path :d="profileHeadOutline" />
+                            <path :d="profileTorsoOutline" />
+                        </g>
+                    </template>
+                    <template v-else>
+                        <ellipse v-bind="headOutline" />
+                        <path :d="torsoOutline" />
+                        <line
+                            x1="0"
+                            y1="44"
+                            x2="0"
+                            y2="250"
+                            class="stroke-foreground/10"
+                            stroke-dasharray="3 3"
+                        />
+                    </template>
+                    <text
+                        x="-108"
+                        y="120"
+                        text-anchor="middle"
+                        class="fill-muted-foreground stroke-none text-[10px]"
+                    >
+                        {{ edgeMarkers(view)[0] }}
+                    </text>
+                    <text
+                        x="108"
+                        y="120"
+                        text-anchor="middle"
+                        class="fill-muted-foreground stroke-none text-[10px]"
+                    >
+                        {{ edgeMarkers(view)[1] }}
+                    </text>
+                    <text
+                        x="0"
+                        y="264"
+                        text-anchor="middle"
+                        class="fill-muted-foreground stroke-none text-[10px]"
+                    >
+                        {{ viewLabels[view] }}
+                    </text>
+                </g>
             </g>
-        </g>
 
-        <text
-            :x="figureOrigins.front"
-            y="270"
-            text-anchor="middle"
-            class="fill-muted-foreground text-[10px]"
-        >
-            Front
-        </text>
-        <text
-            :x="figureOrigins.back"
-            y="270"
-            text-anchor="middle"
-            class="fill-muted-foreground text-[10px]"
-        >
-            Back
-        </text>
-
-        <g v-for="group in [frontRegions, backRegions]" :key="group[0]?.view">
             <component
-                v-for="region in group"
-                :key="region.id"
-                :is="region.shape"
-                v-bind="region.attributes"
-                :class="regionClasses(region.id)"
-                :data-region="region.id"
-                :data-selection="selectionFor(region.id) ?? 'none'"
+                v-for="shape in regionShapes"
+                :key="`${shape.view}:${shape.region}`"
+                :is="shape.shape"
+                v-bind="shape.attributes"
+                :class="regionClasses(shape.region)"
+                :data-region="shape.region"
+                :data-view="shape.view"
+                :data-selection="selectionFor(shape.region) ?? 'none'"
                 role="button"
                 tabindex="0"
-                :aria-label="region.label"
-                :aria-pressed="selectionFor(region.id) !== null"
-                @click="emit('toggle', region.id)"
-                @keydown="onKeydown($event, region.id)"
+                :aria-label="findRegion(shape.region)?.label"
+                :aria-pressed="selectionFor(shape.region) !== null"
+                @click="emit('toggle', shape.region)"
+                @keydown="onKeydown($event, shape.region)"
+                @mouseenter="hovered = shape.region"
+                @mouseleave="hovered = null"
+                @focus="hovered = shape.region"
+                @blur="hovered = null"
             >
-                <title>{{ region.label }}</title>
+                <title>
+                    {{ findRegion(shape.region)?.label }} ({{
+                        findRegion(shape.region)?.term
+                    }})
+                </title>
             </component>
-        </g>
-    </svg>
+        </svg>
+
+        <p
+            class="text-muted-foreground h-5 text-sm"
+            aria-live="polite"
+            data-testid="hovered-region"
+        >
+            <template v-if="hoveredRegion">
+                <span class="text-foreground font-medium">
+                    {{ hoveredRegion.label }}
+                </span>
+                &middot; {{ hoveredRegion.term }}
+            </template>
+            <template v-else>Hover over an area to see what it is</template>
+        </p>
+    </div>
 </template>

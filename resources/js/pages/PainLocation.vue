@@ -3,7 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import { RotateCcw } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import BodyMap from '@/components/BodyMap.vue';
-import { bodyRegions, type BodyRegionId } from '@/lib/bodyRegions';
+import { findRegion, type BodyRegionId } from '@/lib/bodyRegions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { painLocation } from '@/routes';
@@ -49,8 +49,9 @@ const reset = (): void => {
     secondary.value = [];
 };
 
-const labelFor = (id: BodyRegionId): string =>
-    bodyRegions.find((region) => region.id === id)?.label ?? id;
+const labelFor = (id: BodyRegionId): string => findRegion(id)?.label ?? id;
+
+const termFor = (id: BodyRegionId): string => findRegion(id)?.term ?? '';
 
 const hasSelection = computed(
     () => primary.value !== null || secondary.value.length > 0,
@@ -69,7 +70,8 @@ const hasSelection = computed(
                 <p class="text-muted-foreground text-sm">
                     Click where the pain is. The first area you choose is your
                     primary location; any others are secondary. Click an area
-                    again to clear it.
+                    again to clear it. The same area can be selected from any
+                    view.
                 </p>
             </div>
 
@@ -109,6 +111,9 @@ const hasSelection = computed(
                     </p>
                     <Badge v-else data-testid="primary-label">
                         {{ labelFor(primary) }}
+                        <span class="opacity-70"
+                            >&middot; {{ termFor(primary) }}</span
+                        >
                     </Badge>
                 </section>
 
@@ -127,6 +132,9 @@ const hasSelection = computed(
                         <li v-for="id in secondary" :key="id">
                             <Badge variant="secondary">
                                 {{ labelFor(id) }}
+                                <span class="opacity-70"
+                                    >&middot; {{ termFor(id) }}</span
+                                >
                             </Badge>
                         </li>
                     </ul>
