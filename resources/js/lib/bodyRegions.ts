@@ -1,118 +1,194 @@
-export type BodyRegionId =
+export type BodySide = 'left' | 'right';
+
+export type BodyView = 'front' | 'back';
+
+export type RegionKey =
     | 'forehead'
-    | 'left-temple'
-    | 'right-temple'
-    | 'left-eye'
-    | 'right-eye'
-    | 'face'
-    | 'crown'
-    | 'back-of-head'
+    | 'temple'
+    | 'eye'
+    | 'sinus'
+    | 'jaw'
     | 'neck'
-    | 'left-shoulder'
-    | 'right-shoulder';
+    | 'shoulder'
+    | 'crown'
+    | 'upper-back-of-head'
+    | 'lower-back-of-head'
+    | 'behind-ear'
+    | 'back-of-neck'
+    | 'back-of-shoulder';
+
+export type BodyRegionId = `${BodySide}-${RegionKey}`;
 
 export type BodyRegion = {
     id: BodyRegionId;
+    key: RegionKey;
+    side: BodySide;
     label: string;
-    view: 'front' | 'back';
+    view: BodyView;
     shape: 'ellipse' | 'path';
     attributes: Record<string, string | number>;
 };
 
 export type RegionSelection = 'primary' | 'secondary' | null;
 
-// Coarse regions only for now: the diagram is deliberately rough while the
-// clickable-SVG approach is being evaluated.
-export const bodyRegions: BodyRegion[] = [
+type EllipseShape = { cx: number; cy: number; rx: number; ry: number };
+
+type RegionTemplate = {
+    key: RegionKey;
+    label: string;
+    view: BodyView;
+    shape: { path: string } | { ellipse: EllipseShape };
+};
+
+// Each figure is drawn in local coordinates with x = 0 down the midline and
+// the head centred at (0, 108). Templates describe the patient's left side
+// only; the right side is produced by mirroring across the midline.
+export const figureOrigins: Record<BodyView, number> = {
+    front: 120,
+    back: 360,
+};
+
+export const headOutline: EllipseShape = { cx: 0, cy: 108, rx: 50, ry: 66 };
+
+export const torsoOutline =
+    'M -20 172 L -24 204 Q -70 206 -96 224 Q -104 236 -96 250 L 96 250 Q 104 236 96 224 Q 70 206 24 204 L 20 172';
+
+const templates: RegionTemplate[] = [
     {
-        id: 'forehead',
+        key: 'forehead',
         label: 'Forehead',
         view: 'front',
-        shape: 'path',
-        attributes: {
-            d: 'M 62 36 Q 100 18 138 36 L 138 62 L 62 62 Z',
-        },
+        shape: { path: 'M 0 46 Q 30 46 46 70 L 46 84 L 0 84 Z' },
     },
     {
-        id: 'left-temple',
-        label: 'Left temple',
+        key: 'temple',
+        label: 'Temple',
         view: 'front',
-        shape: 'ellipse',
-        attributes: { cx: 58, cy: 78, rx: 12, ry: 22 },
+        shape: { path: 'M 38 84 L 49 78 Q 52 104 48 130 L 38 128 Z' },
     },
     {
-        id: 'right-temple',
-        label: 'Right temple',
+        key: 'eye',
+        label: 'Eye',
         view: 'front',
-        shape: 'ellipse',
-        attributes: { cx: 142, cy: 78, rx: 12, ry: 22 },
+        shape: { ellipse: { cx: 19, cy: 96, rx: 13, ry: 8 } },
     },
     {
-        id: 'left-eye',
-        label: 'Left eye',
+        key: 'sinus',
+        label: 'Sinus',
         view: 'front',
-        shape: 'ellipse',
-        attributes: { cx: 84, cy: 76, rx: 13, ry: 10 },
+        shape: { path: 'M 3 106 L 34 108 L 34 126 L 3 128 Z' },
     },
     {
-        id: 'right-eye',
-        label: 'Right eye',
+        key: 'jaw',
+        label: 'Jaw',
         view: 'front',
-        shape: 'ellipse',
-        attributes: { cx: 116, cy: 76, rx: 13, ry: 10 },
+        shape: { path: 'M 3 130 L 38 130 Q 38 158 3 172 Z' },
     },
     {
-        id: 'face',
-        label: 'Face and jaw',
-        view: 'front',
-        shape: 'path',
-        attributes: {
-            d: 'M 70 92 L 130 92 Q 132 130 100 138 Q 68 130 70 92 Z',
-        },
-    },
-    {
-        id: 'neck',
+        key: 'neck',
         label: 'Neck',
         view: 'front',
-        shape: 'path',
-        attributes: {
-            d: 'M 84 136 L 116 136 L 118 166 L 82 166 Z',
-        },
+        shape: { path: 'M 0 174 L 20 172 L 24 204 L 0 204 Z' },
     },
     {
-        id: 'left-shoulder',
-        label: 'Left shoulder',
+        key: 'shoulder',
+        label: 'Shoulder',
         view: 'front',
-        shape: 'path',
-        attributes: {
-            d: 'M 82 166 L 20 178 Q 12 190 18 204 L 82 190 Z',
+        shape: {
+            path: 'M 0 204 L 24 204 Q 70 206 96 224 Q 104 236 96 250 L 0 250 Z',
         },
     },
     {
-        id: 'right-shoulder',
-        label: 'Right shoulder',
-        view: 'front',
-        shape: 'path',
-        attributes: {
-            d: 'M 118 166 L 180 178 Q 188 190 182 204 L 118 190 Z',
-        },
-    },
-    {
-        id: 'crown',
+        key: 'crown',
         label: 'Top of head',
         view: 'back',
-        shape: 'path',
-        attributes: {
-            d: 'M 262 36 Q 300 14 338 36 L 338 60 L 262 60 Z',
-        },
+        shape: { path: 'M 0 44 Q 32 46 47 72 Q 24 80 0 82 Z' },
     },
     {
-        id: 'back-of-head',
-        label: 'Back of head',
+        key: 'upper-back-of-head',
+        label: 'Upper back of head',
         view: 'back',
-        shape: 'path',
-        attributes: {
-            d: 'M 262 60 L 338 60 Q 340 120 300 136 Q 260 120 262 60 Z',
+        shape: { path: 'M 0 82 Q 24 80 47 72 Q 52 96 50 118 L 0 118 Z' },
+    },
+    {
+        key: 'lower-back-of-head',
+        label: 'Lower back of head',
+        view: 'back',
+        shape: { path: 'M 0 118 L 36 118 L 34 158 Q 20 172 0 174 Z' },
+    },
+    {
+        key: 'behind-ear',
+        label: 'Behind ear',
+        view: 'back',
+        shape: { path: 'M 36 118 L 50 118 Q 48 148 30 166 L 34 158 Z' },
+    },
+    {
+        key: 'back-of-neck',
+        label: 'Back of neck',
+        view: 'back',
+        shape: { path: 'M 0 174 L 20 172 L 24 204 L 0 204 Z' },
+    },
+    {
+        key: 'back-of-shoulder',
+        label: 'Back of shoulder',
+        view: 'back',
+        shape: {
+            path: 'M 0 204 L 24 204 Q 70 206 96 224 Q 104 236 96 250 L 0 250 Z',
         },
     },
 ];
+
+// Paths only use absolute M/L/Q/Z commands, so every odd-numbered value is an
+// x coordinate that can be flipped and shifted independently.
+const transformPath = (d: string, flip: boolean, offset: number): string => {
+    let isX = true;
+
+    return d.replace(/-?\d+(\.\d+)?/g, (value) => {
+        const number = Number(value);
+        const result = isX ? (flip ? -number : number) + offset : number;
+        isX = !isX;
+
+        return String(result);
+    });
+};
+
+// Anatomical left appears on the viewer's right when facing the figure, and
+// on the viewer's left when looking at its back.
+const isFlipped = (view: BodyView, side: BodySide): boolean =>
+    view === 'front' ? side === 'right' : side === 'left';
+
+const buildRegion = (template: RegionTemplate, side: BodySide): BodyRegion => {
+    const flip = isFlipped(template.view, side);
+    const offset = figureOrigins[template.view];
+    const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+    const base = {
+        id: `${side}-${template.key}` as BodyRegionId,
+        key: template.key,
+        side,
+        label: `${sideLabel} ${template.label.toLowerCase()}`,
+        view: template.view,
+    };
+
+    if ('ellipse' in template.shape) {
+        const { cx, cy, rx, ry } = template.shape.ellipse;
+
+        return {
+            ...base,
+            shape: 'ellipse',
+            attributes: { cx: (flip ? -cx : cx) + offset, cy, rx, ry },
+        };
+    }
+
+    return {
+        ...base,
+        shape: 'path',
+        attributes: { d: transformPath(template.shape.path, flip, offset) },
+    };
+};
+
+export const bodyRegions: BodyRegion[] = templates.flatMap((template) =>
+    (['left', 'right'] as BodySide[]).map((side) =>
+        buildRegion(template, side),
+    ),
+);

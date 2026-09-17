@@ -2,6 +2,9 @@
 import { computed } from 'vue';
 import {
     bodyRegions,
+    figureOrigins,
+    headOutline,
+    torsoOutline,
     type BodyRegionId,
     type RegionSelection,
 } from '@/lib/bodyRegions';
@@ -57,7 +60,7 @@ const onKeydown = (event: KeyboardEvent, id: BodyRegionId): void => {
 
 <template>
     <svg
-        viewBox="0 0 400 220"
+        viewBox="0 0 480 280"
         role="group"
         aria-label="Body map"
         class="h-auto w-full max-w-xl select-none"
@@ -67,33 +70,51 @@ const onKeydown = (event: KeyboardEvent, id: BodyRegionId): void => {
             class="stroke-foreground/20 fill-none stroke-[1.5]"
             aria-hidden="true"
         >
-            <path
-                d="M 62 36 Q 100 10 138 36 Q 156 80 132 128 Q 116 142 100 142 Q 84 142 68 128 Q 44 80 62 36 Z"
-            />
-            <path
-                d="M 84 136 L 82 166 L 20 178 M 116 136 L 118 166 L 180 178"
-            />
-            <path d="M 12 190 Q 100 214 188 190" />
-            <path
-                d="M 262 36 Q 300 10 338 36 Q 356 80 332 128 Q 316 142 300 142 Q 284 142 268 128 Q 244 80 262 36 Z"
-            />
-            <path
-                d="M 284 136 L 282 166 L 220 178 M 316 136 L 318 166 L 380 178"
-            />
-            <path d="M 212 190 Q 300 214 388 190" />
+            <g
+                v-for="(originX, view) in figureOrigins"
+                :key="view"
+                :transform="`translate(${originX} 0)`"
+            >
+                <ellipse v-bind="headOutline" />
+                <path :d="torsoOutline" />
+                <line
+                    x1="0"
+                    y1="44"
+                    x2="0"
+                    y2="250"
+                    class="stroke-foreground/10"
+                    stroke-dasharray="3 3"
+                />
+                <text
+                    x="-108"
+                    y="120"
+                    text-anchor="middle"
+                    class="fill-muted-foreground stroke-none text-[10px]"
+                >
+                    {{ view === 'front' ? 'R' : 'L' }}
+                </text>
+                <text
+                    x="108"
+                    y="120"
+                    text-anchor="middle"
+                    class="fill-muted-foreground stroke-none text-[10px]"
+                >
+                    {{ view === 'front' ? 'L' : 'R' }}
+                </text>
+            </g>
         </g>
 
         <text
-            x="100"
-            y="216"
+            :x="figureOrigins.front"
+            y="270"
             text-anchor="middle"
             class="fill-muted-foreground text-[10px]"
         >
             Front
         </text>
         <text
-            x="300"
-            y="216"
+            :x="figureOrigins.back"
+            y="270"
             text-anchor="middle"
             class="fill-muted-foreground text-[10px]"
         >
