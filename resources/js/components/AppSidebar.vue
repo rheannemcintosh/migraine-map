@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { CalendarDays, Download, LayoutGrid, Pill } from '@lucide/vue';
+import {
+    CalendarDays,
+    Download,
+    LayoutGrid,
+    PersonStanding,
+    Pill,
+} from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -13,7 +19,13 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { calendar, dashboard, medicationExports, medications } from '@/routes';
+import {
+    calendar,
+    dashboard,
+    medicationExports,
+    medications,
+    painLocation,
+} from '@/routes';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -36,6 +48,11 @@ const mainNavItems: NavItem[] = [
         title: 'Export',
         href: medicationExports(),
         icon: Download,
+    },
+    {
+        title: 'Pain location',
+        href: painLocation(),
+        icon: PersonStanding,
     },
 ];
 </script>
