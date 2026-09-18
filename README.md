@@ -74,6 +74,16 @@ SQL Server container. No extra setup is needed:
 ./vendor/bin/sail artisan test
 ```
 
+## Security
+
+Dependency, secret and static-analysis scans are documented in
+[`docs/security/`](docs/security), with a script to run them and a write-up
+of each scan:
+
+```bash
+./scripts/security-scan.sh
+```
+
 ## Checks
 
 ```bash
