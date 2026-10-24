@@ -33,6 +33,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('medications/exports/{migraineExport}/download', [MigraineExportController::class, 'download'])
         ->name('medication-exports.download');
 
+    Route::inertia('pain-location', 'PainLocation')->name('pain-location');
+
     Route::get('medications', [MedicationController::class, 'index'])
         ->name('medications');
     Route::post('medications', [MedicationController::class, 'store'])
