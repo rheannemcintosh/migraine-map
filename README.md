@@ -12,7 +12,7 @@ The product documentation lives in [`product/`](product): the
 
 ## Stack
 
-- Laravel 13 (PHP 8.3+) with the Vue starter kit (Inertia.js + Vue 3, Tailwind
+- Laravel 13 (PHP 8.4.27+) with the Vue starter kit (Inertia.js + Vue 3, Tailwind
   CSS, shadcn-vue) and Laravel Fortify for session authentication
 - SQL Server 2022 locally (Azure SQL Database in production)
 - Pest for testing, Pint for formatting, PHPStan (Larastan) for static analysis

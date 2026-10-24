@@ -5,7 +5,7 @@
 # Needs both PHP (Wayfinder generates route types via `artisan` during the
 # Vite build) and Node, so the build runs on the PHP CLI image with Node added.
 # ---------------------------------------------------------------------------
-FROM serversideup/php:8.4-cli AS build
+FROM serversideup/php:8.4.27-cli AS build
 
 USER root
 
@@ -38,7 +38,7 @@ RUN composer dump-autoload --optimize --no-dev \
 # ---------------------------------------------------------------------------
 # Stage 2: runtime — nginx + php-fpm, listening on :8080
 # ---------------------------------------------------------------------------
-FROM serversideup/php:8.4-fpm-nginx AS runtime
+FROM serversideup/php:8.4.27-fpm-nginx AS runtime
 
 USER root
 
